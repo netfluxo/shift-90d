@@ -26,7 +26,7 @@ export default async function RankingPage() {
       <header className="sticky top-0 bg-white border-b border-gray-100 z-40">
         <div className="px-4 py-3">
           <h1 className="text-2xl font-bold text-primary">Ranking</h1>
-          <p className="text-sm text-gray-500">Os melhores do Shift90D</p>
+          <p className="text-sm text-gray-500">Os melhores do Shift 90D</p>
         </div>
       </header>
 

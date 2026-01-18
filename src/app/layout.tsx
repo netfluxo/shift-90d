@@ -7,7 +7,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Shift90D",
+  title: "Shift 90D",
   description: "App de atividade fisica - Transforme seu corpo em 90 dias",
   manifest: "/manifest.json",
 };
@@ -17,7 +17,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#50A5E6",
+  themeColor: "#1E5A8A",
 };
 
 export default function RootLayout({
@@ -27,8 +27,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body className={`${inter.className} antialiased bg-gray-50`}>
-        <main className="max-w-lg mx-auto min-h-screen bg-white">
+      <body className={`${inter.className} antialiased bg-linear-to-br from-primary-dark via-primary to-secondary-dark bg-fixed`}>
+        <main className="max-w-lg mx-auto min-h-screen">
           {children}
         </main>
       </body>

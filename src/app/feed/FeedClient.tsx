@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Post } from '@/lib/types';
-import PostCard from '@/components/post/PostCard';
-import CreatePost from '@/components/post/CreatePost';
 import BottomNav from '@/components/layout/BottomNav';
+import CreatePost from '@/components/post/CreatePost';
+import PostCard from '@/components/post/PostCard';
+import { Post } from '@/lib/types';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 
 interface FeedClientProps {
   posts: Post[];
@@ -21,11 +21,11 @@ export default function FeedClient({ posts: initialPosts, currentUserId }: FeedC
   };
 
   return (
-    <div className="pb-20">
+    <div className="pb-5">
       {/* Header */}
       <header className="sticky top-0 bg-white border-b border-gray-100 z-40">
         <div className="px-4 py-3">
-          <h1 className="text-2xl font-bold text-primary">Shift90D</h1>
+          <h1 className="text-2xl font-bold text-primary">Shift 90D</h1>
         </div>
       </header>
 

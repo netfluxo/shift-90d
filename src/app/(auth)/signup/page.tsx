@@ -64,7 +64,7 @@ export default function SignupPage() {
     <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-linear-to-b from-secondary/10 to-white">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-secondary mb-2">Shift90D</h1>
+          <h1 className="text-4xl font-bold text-secondary mb-2">Shift 90D</h1>
           <p className="text-gray-600">Crie sua conta e comece agora</p>
         </div>
 

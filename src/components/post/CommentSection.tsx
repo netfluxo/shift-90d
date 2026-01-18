@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import { Comment } from '@/lib/types';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Comment } from '@/lib/types';
-import { createClient } from '@/lib/supabase/client';
+import { useEffect, useState } from 'react';
 
 interface CommentSectionProps {
   postId: string;
@@ -94,7 +94,7 @@ export default function CommentSection({ postId, currentUserId, onClose }: Comme
           comments.map((comment) => (
             <div key={comment.id} className="flex gap-2">
               <Link href={`/profile/${comment.user_id}`}>
-                <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden flex-shrink-0">
+                <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden shrink-0">
                   {comment.user?.avatar_url ? (
                     <Image
                       src={comment.user.avatar_url}
