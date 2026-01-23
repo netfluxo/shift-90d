@@ -1,6 +1,7 @@
 'use client';
 
 import { createClient } from '@/lib/supabase/client';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -46,7 +47,14 @@ export default function LoginPage() {
     <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-linear-to-b from-primary/10 to-white">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-primary mb-2">Shift 90D</h1>
+          <Image
+            src="/logo.png"
+            alt="Shift"
+            width={180}
+            height={60}
+            className="mx-auto mb-4"
+            priority
+          />
           <p className="text-gray-600">Transforme seu corpo em 90 dias</p>
         </div>
 

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { getDateInBrazil, getTodayInBrazil } from '@/lib/utils/timezone';
 import { redirect } from 'next/navigation';
 import ProfileClient from './ProfileClient';
 
@@ -45,6 +46,65 @@ export default async function ProfilePage() {
     is_liked: likedPostIds.has(post.id),
   })) || [];
 
+  // Fetch activity stats directly from Supabase
+  const todayInBrazil = getTodayInBrazil();
+
+  // Count today's posts
+  const { count: todayPostsCount } = await supabase
+    .from('posts')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', authUser.id)
+    .gte('created_at', `${todayInBrazil}T00:00:00-03:00`)
+    .lt('created_at', `${todayInBrazil}T23:59:59.999-03:00`);
+
+  // Get all posts to calculate active days and streak
+  const { data: userPosts } = await supabase
+    .from('posts')
+    .select('created_at')
+    .eq('user_id', authUser.id)
+    .order('created_at', { ascending: false });
+
+  // Calculate unique active days from posts (using Brazil timezone)
+  const uniqueDates = new Set<string>();
+  userPosts?.forEach((post) => {
+    // Convert to Brazil timezone before extracting date
+    const postDate = getDateInBrazil(new Date(post.created_at));
+    uniqueDates.add(postDate);
+  });
+  const activeDays = uniqueDates.size;
+
+  // Calculate current streak from unique dates
+  let currentStreak = 0;
+  if (uniqueDates.size > 0) {
+    const sortedDates = Array.from(uniqueDates).sort().reverse();
+    const today = new Date(todayInBrazil);
+    let checkDate = new Date(today);
+
+    // If no activity today, start checking from yesterday
+    if (!uniqueDates.has(todayInBrazil)) {
+      checkDate.setDate(checkDate.getDate() - 1);
+    }
+
+    for (const dateStr of sortedDates) {
+      const checkDateStr = checkDate.toISOString().split('T')[0];
+      if (dateStr === checkDateStr) {
+        currentStreak++;
+        checkDate.setDate(checkDate.getDate() - 1);
+      } else if (dateStr < checkDateStr) {
+        // Date is older than expected, streak is broken
+        break;
+      }
+    }
+  }
+
+  const activityStats = {
+    total_active_days: activeDays || 0,
+    current_streak: currentStreak,
+    total_points: user?.points || 0,
+    today_posts: todayPostsCount || 0,
+    today_points: Math.min(todayPostsCount || 0, 3),
+  };
+
   // If user profile doesn't exist, create one
   if (!user) {
     const userName = authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'Usuario';
@@ -82,6 +142,7 @@ export default async function ProfilePage() {
         posts={[]}
         currentUserId={authUser.id}
         isOwnProfile={true}
+        activityStats={activityStats}
       />
     );
   }
@@ -92,6 +153,7 @@ export default async function ProfilePage() {
       posts={transformedPosts}
       currentUserId={authUser.id}
       isOwnProfile={true}
+      activityStats={activityStats}
     />
   );
 }

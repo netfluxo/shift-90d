@@ -18,11 +18,14 @@ DROP POLICY IF EXISTS "Comments are viewable by everyone" ON public.comments;
 DROP POLICY IF EXISTS "Authenticated users can create comments" ON public.comments;
 DROP POLICY IF EXISTS "Users can update own comments" ON public.comments;
 DROP POLICY IF EXISTS "Users can delete own comments" ON public.comments;
+DROP POLICY IF EXISTS "Users can view their own activity" ON public.user_activity;
+DROP POLICY IF EXISTS "Users can view all activity for ranking" ON public.user_activity;
 
 -- Dropar tabelas na ordem correta (por causa das foreign keys)
 DROP TABLE IF EXISTS public.comments CASCADE;
 DROP TABLE IF EXISTS public.likes CASCADE;
 DROP TABLE IF EXISTS public.posts CASCADE;
+DROP TABLE IF EXISTS public.user_activity CASCADE;
 DROP TABLE IF EXISTS public.users CASCADE;
 
 -- Recriar tabelas
@@ -59,11 +62,23 @@ CREATE TABLE public.comments (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+CREATE TABLE public.user_activity (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  activity_date DATE NOT NULL,
+  posts_count INTEGER DEFAULT 0 NOT NULL,
+  points_earned INTEGER DEFAULT 0 NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  CONSTRAINT user_activity_unique_user_date UNIQUE(user_id, activity_date)
+);
+
 -- Habilitar RLS
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.likes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_activity ENABLE ROW LEVEL SECURITY;
 
 -- Policies para USERS
 CREATE POLICY "Users are viewable by everyone" ON public.users FOR SELECT USING (true);
@@ -87,6 +102,10 @@ CREATE POLICY "Authenticated users can create comments" ON public.comments FOR I
 CREATE POLICY "Users can update own comments" ON public.comments FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "Users can delete own comments" ON public.comments FOR DELETE USING (auth.uid() = user_id);
 
+-- Policies para USER_ACTIVITY
+CREATE POLICY "Users can view their own activity" ON public.user_activity FOR SELECT TO authenticated USING (auth.uid() = user_id);
+CREATE POLICY "Users can view all activity for ranking" ON public.user_activity FOR SELECT TO authenticated USING (true);
+
 -- Indexes
 CREATE INDEX idx_posts_user_id ON public.posts(user_id);
 CREATE INDEX idx_posts_created_at ON public.posts(created_at DESC);
@@ -94,6 +113,8 @@ CREATE INDEX idx_likes_post_id ON public.likes(post_id);
 CREATE INDEX idx_likes_user_id ON public.likes(user_id);
 CREATE INDEX idx_comments_post_id ON public.comments(post_id);
 CREATE INDEX idx_users_points ON public.users(points DESC);
+CREATE INDEX idx_user_activity_user_date ON public.user_activity(user_id, activity_date DESC);
+CREATE INDEX idx_user_activity_date ON public.user_activity(activity_date);
 
 -- Storage buckets
 INSERT INTO storage.buckets (id, name, public) VALUES ('posts', 'posts', true) ON CONFLICT (id) DO NOTHING;

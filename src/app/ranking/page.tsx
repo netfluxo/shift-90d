@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import RankingItem from '@/components/ranking/RankingItem';
 import BottomNav from '@/components/layout/BottomNav';
+import Header from '@/components/layout/Header';
 import { User } from '@/lib/types';
 
 export default async function RankingPage() {
@@ -13,22 +14,26 @@ export default async function RankingPage() {
     redirect('/login');
   }
 
-  // Fetch users ordered by points
-  const { data: users } = await supabase
+  // Fetch users with active days count ordered by points
+  const { data: usersData } = await supabase
     .from('users')
-    .select('*')
+    .select(`
+      *,
+      user_activity(activity_date)
+    `)
     .order('points', { ascending: false })
     .limit(100);
+
+  // Transform data to include active days count
+  const users = usersData?.map((user) => ({
+    ...user,
+    active_days: user.user_activity?.length || 0,
+  })) || [];
 
   return (
     <div className="pb-20">
       {/* Header */}
-      <header className="sticky top-0 bg-white border-b border-gray-100 z-40">
-        <div className="px-4 py-3">
-          <h1 className="text-2xl font-bold text-primary">Ranking</h1>
-          <p className="text-sm text-gray-500">Os melhores do Shift 90D</p>
-        </div>
-      </header>
+      <Header subtitle="Ranking" />
 
       {/* Ranking List */}
       <div className="divide-y divide-gray-100">

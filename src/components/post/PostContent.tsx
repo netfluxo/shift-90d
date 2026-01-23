@@ -1,6 +1,5 @@
 'use client';
 
-import { createClient } from '@/lib/supabase/client';
 import { Post } from '@/lib/types';
 import Image from 'next/image';
 import { useState } from 'react';
@@ -22,29 +21,33 @@ export default function PostContent({ post, currentUserId, compact = false }: Po
     if (isLiking) return;
     setIsLiking(true);
 
-    const supabase = createClient();
+    // Optimistic UI update
+    const previousIsLiked = isLiked;
+    const previousLikesCount = likesCount;
+    setIsLiked(!isLiked);
+    setLikesCount((prev) => (isLiked ? prev - 1 : prev + 1));
 
-    if (isLiked) {
-      const { error } = await supabase
-        .from('likes')
-        .delete()
-        .eq('user_id', currentUserId)
-        .eq('post_id', post.id);
-
-      if (!error) {
-        setIsLiked(false);
-        setLikesCount((prev) => prev - 1);
-      }
-    } else {
-      const { error } = await supabase.from('likes').insert({
-        user_id: currentUserId,
-        post_id: post.id,
+    try {
+      const response = await fetch('/api/likes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ post_id: post.id }),
       });
 
-      if (!error) {
-        setIsLiked(true);
-        setLikesCount((prev) => prev + 1);
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to toggle like');
       }
+
+      // Update with server response
+      setIsLiked(data.action === 'liked');
+      setLikesCount(data.likes_count);
+    } catch (error) {
+      console.error('Error toggling like:', error);
+      // Revert optimistic update on error
+      setIsLiked(previousIsLiked);
+      setLikesCount(previousLikesCount);
     }
 
     setIsLiking(false);
@@ -64,6 +67,16 @@ export default function PostContent({ post, currentUserId, compact = false }: Po
     }
   };
 
+  // Generate an alt text for the image. If caption exists, use it; else, fallback to a generic description with username.
+  const generateAltText = (post: Post) => {
+    if (post.caption && post.caption.trim()) {
+      return post.caption;
+    } else if (post.user?.name) {
+      return `Imagem publicada por ${post.user.name}`;
+    }
+    return 'Publicação do usuário no Shift 90D';
+  };
+
   return (
     <>
       {/* Media */}
@@ -79,7 +92,7 @@ export default function PostContent({ post, currentUserId, compact = false }: Po
         ) : (
           <Image
             src={post.media_url}
-            alt={post.caption}
+            alt={generateAltText(post)}
             fill
             className={compact ? 'object-contain' : 'object-cover'}
             sizes="(max-width: 512px) 100vw, 512px"

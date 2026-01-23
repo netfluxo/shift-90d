@@ -10,6 +10,10 @@ export const metadata: Metadata = {
   title: "Shift 90D",
   description: "App de atividade fisica - Transforme seu corpo em 90 dias",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export const viewport: Viewport = {

@@ -1,18 +1,28 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { useRouter } from 'next/navigation';
-import Image from 'next/image';
-import { User, Post } from '@/lib/types';
-import { createClient } from '@/lib/supabase/client';
 import BottomNav from '@/components/layout/BottomNav';
+import Header from '@/components/layout/Header';
 import PostModal from '@/components/post/PostModal';
+import { createClient } from '@/lib/supabase/client';
+import { Post, User } from '@/lib/types';
+import Image from 'next/image';
+import { useRouter } from 'next/navigation';
+import { useRef, useState } from 'react';
+
+interface ActivityStats {
+  total_active_days: number;
+  current_streak: number;
+  total_points: number;
+  today_posts: number;
+  today_points: number;
+}
 
 interface ProfileClientProps {
   user: User;
   posts: Post[];
   currentUserId: string;
   isOwnProfile: boolean;
+  activityStats?: ActivityStats; // <-- make optional
 }
 
 export default function ProfileClient({
@@ -20,6 +30,7 @@ export default function ProfileClient({
   posts,
   currentUserId,
   isOwnProfile,
+  activityStats,
 }: ProfileClientProps) {
   const router = useRouter();
   const [name, setName] = useState(user.name);
@@ -100,18 +111,19 @@ export default function ProfileClient({
     setShowSettings(false);
   };
 
-  // Mock data for now - can be fetched from DB later
-  const activeDays = 45;
-  const rankingPosition = 12;
+  // Provide default values if activityStats is undefined to prevent runtime errors
+  const activityStatsSafe: ActivityStats = {
+    total_active_days: activityStats?.total_active_days ?? 0,
+    current_streak: activityStats?.current_streak ?? 0,
+    total_points: activityStats?.total_points ?? 0,
+    today_posts: activityStats?.today_posts ?? 0,
+    today_points: activityStats?.today_points ?? 0,
+  };
 
   return (
     <div className="pb-20 min-h-screen">
       {/* Header */}
-      <header className="bg-white/95 backdrop-blur-sm border-b border-gray-100">
-        <div className="px-4 py-4 text-center">
-          <h1 className="text-xl font-bold text-gray-900">Perfil</h1>
-        </div>
-      </header>
+      <Header subtitle="Perfil" />
 
       {/* Profile Card */}
       <div className="bg-white/95 backdrop-blur-sm mx-4 mt-4 rounded-2xl shadow-sm border border-gray-100">
@@ -190,12 +202,12 @@ export default function ProfileClient({
               <p className="text-xs text-gray-500 mt-0.5">Publicações</p>
             </div>
             <div className="py-4 text-center">
-              <p className="font-bold text-xl text-gray-900">{activeDays}</p>
+              <p className="font-bold text-xl text-gray-900">{activityStatsSafe.total_active_days}</p>
               <p className="text-xs text-gray-500 mt-0.5">Dias ativos</p>
             </div>
             <div className="py-4 text-center">
-              <p className="font-bold text-xl text-gray-900">#{rankingPosition}</p>
-              <p className="text-xs text-gray-500 mt-0.5">Posição</p>
+              <p className="font-bold text-xl text-gray-900">{activityStatsSafe.current_streak}</p>
+              <p className="text-xs text-gray-500 mt-0.5">Sequência</p>
             </div>
           </div>
         </div>
@@ -262,7 +274,7 @@ export default function ProfileClient({
                 ) : (
                   <Image
                     src={post.media_url}
-                    alt={post.caption}
+                    alt={post.caption || 'Foto de perfil'}
                     fill
                     className="object-cover"
                     sizes="(max-width: 512px) 33vw, 170px"

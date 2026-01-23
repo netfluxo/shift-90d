@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 
@@ -16,7 +16,31 @@ export default function CreatePost({ userId, onPostCreated }: CreatePostProps) {
   const [preview, setPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [dailyPostsCount, setDailyPostsCount] = useState(0);
+  const [loadingActivity, setLoadingActivity] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch daily activity stats when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchDailyActivity();
+    }
+  }, [isOpen]);
+
+  const fetchDailyActivity = async () => {
+    setLoadingActivity(true);
+    try {
+      const response = await fetch(`/api/users/${userId}/activity`);
+      if (response.ok) {
+        const data = await response.json();
+        setDailyPostsCount(data.today_posts || 0);
+      }
+    } catch (err) {
+      console.error('Error fetching activity:', err);
+    }
+    setLoadingActivity(false);
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -52,6 +76,7 @@ export default function CreatePost({ userId, onPostCreated }: CreatePostProps) {
 
     setLoading(true);
     setError('');
+    setSuccessMessage('');
 
     const supabase = createClient();
 
@@ -71,30 +96,52 @@ export default function CreatePost({ userId, onPostCreated }: CreatePostProps) {
         .from('posts')
         .getPublicUrl(fileName);
 
-      // Create post
+      // Create post via API
       const mediaType = file.type.startsWith('video/') ? 'video' : 'image';
 
-      const { error: postError } = await supabase.from('posts').insert({
-        user_id: userId,
-        media_url: publicUrl,
-        media_type: mediaType,
-        caption: caption.trim(),
+      const response = await fetch('/api/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          media_url: publicUrl,
+          media_type: mediaType,
+          caption: caption.trim(),
+        }),
       });
 
-      if (postError) throw postError;
+      const data = await response.json();
 
-      // Reset form
-      setCaption('');
-      setFile(null);
-      setPreview(null);
-      setIsOpen(false);
-      onPostCreated();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to create post');
+      }
+
+      // Show success message based on points awarded
+      if (data.points_awarded) {
+        setSuccessMessage('Post criado! +1 ponto 🎉');
+      } else if (data.daily_limit_reached) {
+        setSuccessMessage('Post criado! Limite diário atingido (3/3)');
+      } else {
+        setSuccessMessage('Post criado com sucesso!');
+      }
+
+      // Update daily count
+      setDailyPostsCount(data.daily_posts_count);
+
+      // Reset form after showing success message briefly
+      setTimeout(() => {
+        setCaption('');
+        setFile(null);
+        setPreview(null);
+        setSuccessMessage('');
+        setLoading(false);
+        setIsOpen(false);
+        onPostCreated();
+      }, 1500);
     } catch (err) {
       setError('Erro ao criar post. Tente novamente.');
       console.error(err);
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   const resetForm = () => {
@@ -102,6 +149,7 @@ export default function CreatePost({ userId, onPostCreated }: CreatePostProps) {
     setFile(null);
     setPreview(null);
     setError('');
+    setSuccessMessage('');
     setIsOpen(false);
   };
 
@@ -136,6 +184,27 @@ export default function CreatePost({ userId, onPostCreated }: CreatePostProps) {
         {error && (
           <div className="bg-secondary/10 text-secondary text-sm p-3 rounded-lg mb-4">
             {error}
+          </div>
+        )}
+
+        {successMessage && (
+          <div className="bg-primary/10 text-primary text-sm p-3 rounded-lg mb-4">
+            {successMessage}
+          </div>
+        )}
+
+        {/* Daily limit counter */}
+        {!loadingActivity && (
+          <div className="bg-gray-50 text-gray-600 text-sm p-3 rounded-lg mb-4 text-center">
+            {dailyPostsCount < 3 ? (
+              <span>
+                Posts hoje: <strong>{dailyPostsCount}/3</strong> - Você ganhará pontos por mais {3 - dailyPostsCount} post{3 - dailyPostsCount !== 1 ? 's' : ''} hoje
+              </span>
+            ) : (
+              <span>
+                Posts hoje: <strong>3/3</strong> - Limite de pontos diários atingido, mas continue postando!
+              </span>
+            )}
           </div>
         )}
 

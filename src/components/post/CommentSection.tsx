@@ -17,6 +17,7 @@ export default function CommentSection({ postId, currentUserId, onClose }: Comme
   const [newComment, setNewComment] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     fetchComments();
@@ -44,25 +45,39 @@ export default function CommentSection({ postId, currentUserId, onClose }: Comme
     e.preventDefault();
     if (!newComment.trim() || submitting) return;
 
+    const trimmedComment = newComment.trim();
+
+    // Client-side validation
+    if (trimmedComment.length > 500) {
+      setError('Comentário não pode exceder 500 caracteres');
+      return;
+    }
+
     setSubmitting(true);
-    const supabase = createClient();
+    setError('');
 
-    const { data, error } = await supabase
-      .from('comments')
-      .insert({
-        post_id: postId,
-        user_id: currentUserId,
-        content: newComment.trim(),
-      })
-      .select(`
-        *,
-        user:users(id, name, avatar_url)
-      `)
-      .single();
+    try {
+      const response = await fetch('/api/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          post_id: postId,
+          content: trimmedComment,
+        }),
+      });
 
-    if (!error && data) {
-      setComments((prev) => [...prev, data as Comment]);
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to create comment');
+      }
+
+      // Add new comment to the list
+      setComments((prev) => [...prev, data.comment as Comment]);
       setNewComment('');
+    } catch (err) {
+      console.error('Error creating comment:', err);
+      setError('Erro ao adicionar comentário. Tente novamente.');
     }
 
     setSubmitting(false);
@@ -124,22 +139,38 @@ export default function CommentSection({ postId, currentUserId, onClose }: Comme
         )}
       </div>
 
+      {/* Error message */}
+      {error && (
+        <div className="bg-secondary/10 text-secondary text-xs p-2 rounded mb-2">
+          {error}
+        </div>
+      )}
+
       {/* New comment form */}
-      <form onSubmit={handleSubmit} className="flex gap-2">
-        <input
-          type="text"
-          value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
-          placeholder="Adicione um comentario..."
-          className="flex-1 text-sm border border-gray-200 rounded-full px-4 py-2 outline-none focus:border-primary"
-        />
-        <button
-          type="submit"
-          disabled={!newComment.trim() || submitting}
-          className="text-primary font-semibold text-sm disabled:opacity-50"
-        >
-          Enviar
-        </button>
+      <form onSubmit={handleSubmit} className="space-y-1">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newComment}
+            onChange={(e) => setNewComment(e.target.value)}
+            placeholder="Adicione um comentario..."
+            maxLength={500}
+            className="flex-1 text-sm border border-gray-200 rounded-full px-4 py-2 outline-none focus:border-primary"
+          />
+          <button
+            type="submit"
+            disabled={!newComment.trim() || submitting}
+            className="text-primary font-semibold text-sm disabled:opacity-50"
+          >
+            {submitting ? '...' : 'Enviar'}
+          </button>
+        </div>
+        {/* Character counter */}
+        {newComment.length > 0 && (
+          <p className="text-xs text-gray-400 text-right">
+            {newComment.length}/500
+          </p>
+        )}
       </form>
     </div>
   );
