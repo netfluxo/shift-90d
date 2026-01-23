@@ -30,12 +30,25 @@ export default async function FeedPage() {
 
   const likedPostIds = new Set(userLikes?.map((like) => like.post_id) || []);
 
+  // Fetch user rankings
+  const { data: allUsersRanking } = await supabase
+    .from('users')
+    .select('id')
+    .order('points', { ascending: false });
+
+  // Create a map of user id to ranking position
+  const userRankingMap = new Map<string, number>();
+  allUsersRanking?.forEach((u, index) => {
+    userRankingMap.set(u.id, index + 1);
+  });
+
   // Transform posts data
   const transformedPosts = posts?.map((post) => ({
     ...post,
     likes_count: post.likes?.[0]?.count || 0,
     comments_count: post.comments?.[0]?.count || 0,
     is_liked: likedPostIds.has(post.id),
+    user_ranking: userRankingMap.get(post.user_id) || 0,
   })) || [];
 
   return <FeedClient posts={transformedPosts} currentUserId={user.id} />;

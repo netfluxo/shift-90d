@@ -28,6 +28,14 @@ export default function PostModal({ post, currentUserId, onClose }: PostModalPro
     return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
   };
 
+  const getAvatarRingClass = () => {
+    const ranking = post.user_ranking;
+    if (ranking === 1) return 'ring-2 ring-yellow-500';
+    if (ranking === 2) return 'ring-2 ring-gray-400';
+    if (ranking === 3) return 'ring-2 ring-amber-600';
+    return '';
+  };
+
   return (
     <div
       className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
@@ -40,7 +48,7 @@ export default function PostModal({ post, currentUserId, onClose }: PostModalPro
         {/* Modal Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-100 shrink-0">
           <Link href={`/profile/${post.user_id}`} className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden">
+            <div className={`w-10 h-10 rounded-full bg-gray-200 overflow-hidden ${getAvatarRingClass()}`}>
               {post.user?.avatar_url ? (
                 <Image
                   src={post.user.avatar_url}

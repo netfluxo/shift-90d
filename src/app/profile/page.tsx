@@ -39,11 +39,23 @@ export default async function ProfilePage() {
 
   const likedPostIds = new Set(userLikes?.map((like) => like.post_id) || []);
 
+  // Fetch user rankings for posts
+  const { data: allUsersForPosts } = await supabase
+    .from('users')
+    .select('id')
+    .order('points', { ascending: false });
+
+  const userRankingMap = new Map<string, number>();
+  allUsersForPosts?.forEach((u, index) => {
+    userRankingMap.set(u.id, index + 1);
+  });
+
   const transformedPosts = posts?.map((post) => ({
     ...post,
     likes_count: post.likes?.[0]?.count || 0,
     comments_count: post.comments?.[0]?.count || 0,
     is_liked: likedPostIds.has(post.id),
+    user_ranking: userRankingMap.get(post.user_id) || 0,
   })) || [];
 
   // Fetch activity stats directly from Supabase
@@ -105,6 +117,14 @@ export default async function ProfilePage() {
     today_points: Math.min(todayPostsCount || 0, 3),
   };
 
+  // Calculate user's ranking position
+  const { data: allUsersRanking } = await supabase
+    .from('users')
+    .select('id')
+    .order('points', { ascending: false });
+
+  const rankingPosition = (allUsersRanking?.findIndex(u => u.id === authUser.id) ?? -1) + 1;
+
   // If user profile doesn't exist, create one
   if (!user) {
     const userName = authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'Usuario';
@@ -143,6 +163,7 @@ export default async function ProfilePage() {
         currentUserId={authUser.id}
         isOwnProfile={true}
         activityStats={activityStats}
+        rankingPosition={rankingPosition}
       />
     );
   }
@@ -154,6 +175,7 @@ export default async function ProfilePage() {
       currentUserId={authUser.id}
       isOwnProfile={true}
       activityStats={activityStats}
+      rankingPosition={rankingPosition}
     />
   );
 }

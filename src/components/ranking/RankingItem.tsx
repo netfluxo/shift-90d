@@ -14,27 +14,27 @@ export default function RankingItem({ user, position }: RankingItemProps) {
     switch (position) {
       case 1:
         return {
-          badgeBg: 'bg-yellow-400',
-          badgeText: 'text-white',
-          avatarRing: 'ring-4 ring-yellow-400',
+          badgeBg: 'bg-linear-to-br from-yellow-400 to-yellow-600',
+          badgeText: 'text-white drop-shadow-sm',
+          avatarRing: 'ring-4 ring-yellow-500',
           labelColor: 'text-yellow-600',
           pointsColor: 'text-yellow-600',
         };
       case 2:
         return {
-          badgeBg: 'bg-gray-400',
-          badgeText: 'text-white',
+          badgeBg: 'bg-linear-to-br from-gray-300 to-gray-500',
+          badgeText: 'text-white drop-shadow-sm',
           avatarRing: 'ring-4 ring-gray-400',
           labelColor: 'text-gray-500',
           pointsColor: 'text-gray-500',
         };
       case 3:
         return {
-          badgeBg: 'bg-orange-400',
-          badgeText: 'text-white',
-          avatarRing: 'ring-4 ring-orange-400',
-          labelColor: 'text-orange-500',
-          pointsColor: 'text-orange-500',
+          badgeBg: 'bg-linear-to-br from-amber-600 to-amber-800',
+          badgeText: 'text-white drop-shadow-sm',
+          avatarRing: 'ring-4 ring-amber-600',
+          labelColor: 'text-amber-600',
+          pointsColor: 'text-amber-600',
         };
       default:
         return null;

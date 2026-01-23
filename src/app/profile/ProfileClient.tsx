@@ -23,6 +23,7 @@ interface ProfileClientProps {
   currentUserId: string;
   isOwnProfile: boolean;
   activityStats?: ActivityStats; // <-- make optional
+  rankingPosition?: number;
 }
 
 export default function ProfileClient({
@@ -31,6 +32,7 @@ export default function ProfileClient({
   currentUserId,
   isOwnProfile,
   activityStats,
+  rankingPosition,
 }: ProfileClientProps) {
   const router = useRouter();
   const [name, setName] = useState(user.name);
@@ -130,13 +132,19 @@ export default function ProfileClient({
         {/* User Info Section */}
         <div className="p-5">
           <div className="flex items-center gap-4">
-            {/* Avatar with ring and fire badge */}
+            {/* Avatar with ring and ranking badge */}
             <div className="relative">
               <div
                 onClick={() => isOwnProfile && fileInputRef.current?.click()}
-                className={`w-24 h-24 rounded-full p-1 bg-linear-to-br from-primary-light to-primary ${
-                  isOwnProfile ? 'cursor-pointer' : ''
-                }`}
+                className={`w-24 h-24 rounded-full p-1 ${
+                  rankingPosition === 1
+                    ? 'bg-linear-to-br from-yellow-400 to-yellow-600'
+                    : rankingPosition === 2
+                      ? 'bg-linear-to-br from-gray-300 to-gray-500'
+                      : rankingPosition === 3
+                        ? 'bg-linear-to-br from-amber-600 to-amber-800'
+                        : 'bg-linear-to-br from-primary-light to-primary'
+                } ${isOwnProfile ? 'cursor-pointer' : ''}`}
               >
                 <div className="w-full h-full rounded-full bg-white p-0.5">
                   <div className="w-full h-full rounded-full overflow-hidden bg-gray-200">
@@ -156,10 +164,22 @@ export default function ProfileClient({
                   </div>
                 </div>
               </div>
-              {/* Fire badge */}
-              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-primary-light rounded-full w-8 h-8 flex items-center justify-center shadow-md">
-                <span className="text-lg">🔥</span>
-              </div>
+              {/* Ranking position badge */}
+              {rankingPosition && rankingPosition > 0 && (
+                <div
+                  className={`absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full w-8 h-8 flex items-center justify-center shadow-md ${
+                    rankingPosition === 1
+                      ? 'bg-linear-to-br from-yellow-400 to-yellow-600'
+                      : rankingPosition === 2
+                        ? 'bg-linear-to-br from-gray-300 to-gray-500'
+                        : rankingPosition === 3
+                          ? 'bg-linear-to-br from-amber-600 to-amber-800'
+                          : 'bg-primary-light'
+                  }`}
+                >
+                  <span className="text-sm font-bold text-white drop-shadow-sm">#{rankingPosition}</span>
+                </div>
+              )}
               {isOwnProfile && (
                 <input
                   ref={fileInputRef}
