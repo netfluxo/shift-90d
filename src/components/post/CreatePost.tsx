@@ -119,7 +119,7 @@ export default function CreatePost({ userId, onPostCreated }: CreatePostProps) {
       if (data.points_awarded) {
         setSuccessMessage('Post criado! +1 ponto 🎉');
       } else if (data.daily_limit_reached) {
-        setSuccessMessage('Post criado! Limite diário atingido (3/3)');
+        setSuccessMessage('Post criado! Ponto diário já conquistado (1/1)');
       } else {
         setSuccessMessage('Post criado com sucesso!');
       }
@@ -196,13 +196,13 @@ export default function CreatePost({ userId, onPostCreated }: CreatePostProps) {
         {/* Daily limit counter */}
         {!loadingActivity && (
           <div className="bg-gray-50 text-gray-600 text-sm p-3 rounded-lg mb-4 text-center">
-            {dailyPostsCount < 3 ? (
+            {dailyPostsCount < 1 ? (
               <span>
-                Posts hoje: <strong>{dailyPostsCount}/3</strong> - Você ganhará pontos por mais {3 - dailyPostsCount} post{3 - dailyPostsCount !== 1 ? 's' : ''} hoje
+                Poste hoje para ganhar <strong>+1 ponto</strong>!
               </span>
             ) : (
               <span>
-                Posts hoje: <strong>3/3</strong> - Limite de pontos diários atingido, mas continue postando!
+                Ponto diário conquistado! <strong>1/1</strong> - Continue postando!
               </span>
             )}
           </div>

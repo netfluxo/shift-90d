@@ -125,7 +125,7 @@ export default async function UserProfilePage({ params }: Props) {
     current_streak: currentStreak,
     total_points: user?.points || 0,
     today_posts: todayPostsCount || 0,
-    today_points: Math.min(todayPostsCount || 0, 3),
+    today_points: Math.min(todayPostsCount || 0, 1),
   };
 
   // Calculate user's ranking position

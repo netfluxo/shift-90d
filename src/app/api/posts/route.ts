@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     }
 
     const dailyPostsCount = todayPostsCount || 0;
-    const shouldAwardPoints = dailyPostsCount < 3;
+    const shouldAwardPoints = dailyPostsCount < 1;
 
     // Insert the post
     const { data: post, error: postError } = await supabase
@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
             user_id: user.id,
             activity_date: todayInBrazil,
             posts_count: dailyPostsCount + 1,
-            points_earned: Math.min(dailyPostsCount + 1, 3), // Max 3 points per day
+            points_earned: Math.min(dailyPostsCount + 1, 1), // Max 1 point per day
             updated_at: new Date().toISOString(),
           },
           {
@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
             user_id: user.id,
             activity_date: todayInBrazil,
             posts_count: dailyPostsCount + 1,
-            points_earned: 3, // Already at max
+            points_earned: 1, // Already at max
             updated_at: new Date().toISOString(),
           },
           {
@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
       post,
       points_awarded: pointsAwarded,
       daily_posts_count: dailyPostsCount + 1,
-      daily_limit_reached: dailyPostsCount + 1 >= 3,
+      daily_limit_reached: dailyPostsCount + 1 >= 1,
     });
   } catch (error) {
     console.error('Unexpected error in POST /api/posts:', error);

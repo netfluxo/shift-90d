@@ -3,6 +3,8 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { Post } from '@/lib/types';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import PostContent from './PostContent';
 
 interface PostCardProps {
@@ -11,6 +13,11 @@ interface PostCardProps {
 }
 
 export default function PostCard({ post, currentUserId }: PostCardProps) {
+  const router = useRouter();
+  const [showMenu, setShowMenu] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const isOwner = post.user_id === currentUserId;
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -27,20 +34,33 @@ export default function PostCard({ post, currentUserId }: PostCardProps) {
     return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
   };
 
-  const getAvatarRingClass = () => {
-    const ranking = post.user_ranking;
-    if (ranking === 1) return 'ring-2 ring-yellow-500';
-    if (ranking === 2) return 'ring-2 ring-gray-400';
-    if (ranking === 3) return 'ring-2 ring-amber-600';
-    return '';
+  const handleDelete = async () => {
+    if (!confirm('Tem certeza que deseja apagar esta publicação?')) return;
+
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/posts/${post.id}`, { method: 'DELETE' });
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Erro ao apagar publicação');
+      }
+
+      router.refresh();
+    } catch (error) {
+      console.error('Error deleting post:', error);
+      alert('Erro ao apagar publicação. Tente novamente.');
+    }
+    setIsDeleting(false);
+    setShowMenu(false);
   };
 
   return (
     <article className="bg-white border-b border-gray-100">
       {/* Header */}
-      <div className="flex items-center p-3">
+      <div className="flex items-center justify-between p-3">
         <Link href={`/profile/${post.user_id}`} className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-full bg-gray-200 overflow-hidden ${getAvatarRingClass()}`}>
+          <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden">
             {post.user?.avatar_url ? (
               <Image
                 src={post.user.avatar_url}
@@ -60,10 +80,45 @@ export default function PostCard({ post, currentUserId }: PostCardProps) {
             <p className="text-xs text-gray-500">{formatDate(post.created_at)}</p>
           </div>
         </Link>
+
+        {isOwner && (
+          <div className="relative">
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition"
+            >
+              <MoreIcon className="w-5 h-5 text-gray-500" />
+            </button>
+            {showMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
+                <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 z-20 min-w-[160px]">
+                  <button
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                    className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition disabled:opacity-50"
+                  >
+                    {isDeleting ? 'Apagando...' : 'Apagar publicação'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Post Content */}
       <PostContent post={post} currentUserId={currentUserId} />
     </article>
+  );
+}
+
+function MoreIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <circle cx="12" cy="5" r="2" />
+      <circle cx="12" cy="12" r="2" />
+      <circle cx="12" cy="19" r="2" />
+    </svg>
   );
 }

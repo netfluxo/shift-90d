@@ -75,10 +75,20 @@ export default function ProfileHeader({
     setLoading(true);
     const supabase = createClient();
 
+    // Update public.users table
     const { error } = await supabase
       .from('users')
       .update({ name: name.trim() })
       .eq('id', user.id);
+
+    // Update auth.users metadata (display_name + name + full_name)
+    await supabase.auth.updateUser({
+      data: {
+        name: name.trim(),
+        full_name: name.trim(),
+        display_name: name.trim(),
+      },
+    });
 
     if (!error) {
       onProfileUpdate?.();
