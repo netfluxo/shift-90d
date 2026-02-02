@@ -208,6 +208,29 @@ export default function CreatePost({ userId, onPostCreated }: CreatePostProps) {
           </div>
         )}
 
+        {/* Alertas */}
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+            <p className="font-bold text-sm text-green-800 mb-1">✅ Validação</p>
+            <p className="text-xs text-green-700">
+              Para pontuar, a atividade deve ter no mínimo 15 min, ser registrada no mesmo dia e conter tipo e tempo da atividade. Atividades fora das regras não pontuam.
+            </p>
+          </div>
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+            <p className="font-bold text-sm text-red-800 mb-1">❗ Auditoria</p>
+            <p className="text-xs text-red-700">
+              Mantenha na galeria do seu celular um timelapse diário da atividade, com pelo menos 5 segundos de duração. Você pode precisar...
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+          <p className="font-bold text-sm text-blue-800 mb-1">🏃 Atividades válidas</p>
+          <p className="text-xs text-blue-700">
+            Qualquer atividade com movimento corporal, como caminhada, corrida, musculação, treino funcional, bike, natação, esportes individuais e coletivos, dança, jump, pilates, crossfit e remo.
+          </p>
+        </div>
+
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* File input */}
           <div

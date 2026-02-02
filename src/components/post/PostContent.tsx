@@ -80,21 +80,22 @@ export default function PostContent({ post, currentUserId, compact = false }: Po
   return (
     <>
       {/* Media */}
-      <div className={`relative aspect-square bg-gray-100 ${compact ? '' : ''}`}>
+      <div className="relative bg-gray-100 overflow-hidden max-h-[177.78vw] min-h-[56.25vw] flex items-center justify-center">
         {post.media_type === 'video' ? (
           <video
             src={post.media_url}
             controls
             autoPlay={compact}
-            className={`w-full h-full ${compact ? 'object-contain' : 'object-cover'}`}
+            className="w-full"
             playsInline
           />
         ) : (
           <Image
             src={post.media_url}
             alt={generateAltText(post)}
-            fill
-            className={compact ? 'object-contain' : 'object-cover'}
+            width={1080}
+            height={1080}
+            className="w-full h-auto object-contain"
             sizes="(max-width: 512px) 100vw, 512px"
           />
         )}
