@@ -165,8 +165,8 @@ export default function CreatePost({ userId, onPostCreated }: CreatePostProps) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center">
-      <div className="bg-white w-full max-w-lg rounded-t-2xl p-4 animate-slide-up">
+    <div className="fixed inset-0 bg-black/50 z-60 flex items-end justify-center">
+      <div className="bg-white w-full max-w-lg rounded-t-2xl p-4 animate-slide-up max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <button onClick={resetForm} className="text-gray-500">
             Cancelar
