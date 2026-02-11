@@ -6,14 +6,69 @@ import CreatePost from '@/components/post/CreatePost';
 import PostCard from '@/components/post/PostCard';
 import { Post } from '@/lib/types';
 import { useRouter } from 'next/navigation';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 interface FeedClientProps {
   posts: Post[];
   currentUserId: string;
+  hasMore: boolean;
 }
 
-export default function FeedClient({ posts, currentUserId }: FeedClientProps) {
+export default function FeedClient({ posts: initialPosts, currentUserId, hasMore: initialHasMore }: FeedClientProps) {
   const router = useRouter();
+  const [posts, setPosts] = useState<Post[]>(initialPosts);
+  const [hasMore, setHasMore] = useState(initialHasMore);
+  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1); // page 0 was loaded by the server
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // Reset state when server props change (e.g. after router.refresh())
+  useEffect(() => {
+    setPosts(initialPosts);
+    setHasMore(initialHasMore);
+    setPage(1);
+  }, [initialPosts, initialHasMore]);
+
+  const loadMore = useCallback(async () => {
+    if (loading || !hasMore) return;
+    setLoading(true);
+
+    try {
+      const res = await fetch(`/api/posts/feed?page=${page}&limit=10`);
+      if (!res.ok) throw new Error('Failed to fetch');
+      const data = await res.json();
+
+      setPosts((prev) => {
+        const existingIds = new Set(prev.map((p) => p.id));
+        const newPosts = data.posts.filter((p: Post) => !existingIds.has(p.id));
+        return [...prev, ...newPosts];
+      });
+      setHasMore(data.hasMore);
+      setPage((prev) => prev + 1);
+    } catch (error) {
+      console.error('Error loading more posts:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [loading, hasMore, page]);
+
+  // IntersectionObserver for infinite scroll
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          loadMore();
+        }
+      },
+      { rootMargin: '200px' }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loadMore]);
 
   const handlePostCreated = () => {
     router.refresh();
@@ -40,6 +95,16 @@ export default function FeedClient({ posts, currentUserId }: FeedClientProps) {
           ))
         )}
       </div>
+
+      {/* Sentinel for infinite scroll */}
+      <div ref={sentinelRef} className="h-1" />
+
+      {/* Loading spinner */}
+      {loading && (
+        <div className="flex justify-center py-4">
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        </div>
+      )}
 
       {/* Create Post Button */}
       <CreatePost userId={currentUserId} onPostCreated={handlePostCreated} />

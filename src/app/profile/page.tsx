@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { getDateInBrazil, getTodayInBrazil } from '@/lib/utils/timezone';
 import { redirect } from 'next/navigation';
+import { buildDenseRankingMap } from '@/lib/utils/ranking';
 import ProfileClient from './ProfileClient';
 
 export default async function ProfilePage() {
@@ -39,16 +40,13 @@ export default async function ProfilePage() {
 
   const likedPostIds = new Set(userLikes?.map((like) => like.post_id) || []);
 
-  // Fetch user rankings for posts
-  const { data: allUsersForPosts } = await supabase
+  // Fetch all users for dense ranking (used for posts and profile badge)
+  const { data: allUsersForRanking } = await supabase
     .from('users')
-    .select('id')
+    .select('id, points')
     .order('points', { ascending: false });
 
-  const userRankingMap = new Map<string, number>();
-  allUsersForPosts?.forEach((u, index) => {
-    userRankingMap.set(u.id, index + 1);
-  });
+  const userRankingMap = buildDenseRankingMap(allUsersForRanking || []);
 
   const transformedPosts = posts?.map((post) => ({
     ...post,
@@ -117,13 +115,7 @@ export default async function ProfilePage() {
     today_points: Math.min(todayPostsCount || 0, 1),
   };
 
-  // Calculate user's ranking position
-  const { data: allUsersRanking } = await supabase
-    .from('users')
-    .select('id')
-    .order('points', { ascending: false });
-
-  const rankingPosition = (allUsersRanking?.findIndex(u => u.id === authUser.id) ?? -1) + 1;
+  const rankingPosition = userRankingMap.get(authUser.id) || 0;
 
   // If user profile doesn't exist, create one
   if (!user) {

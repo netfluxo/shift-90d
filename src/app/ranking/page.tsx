@@ -4,6 +4,7 @@ import RankingItem from '@/components/ranking/RankingItem';
 import BottomNav from '@/components/layout/BottomNav';
 import Header from '@/components/layout/Header';
 import { User } from '@/lib/types';
+import { buildDenseRankingMap } from '@/lib/utils/ranking';
 
 export default async function RankingPage() {
   const supabase = await createClient();
@@ -21,6 +22,7 @@ export default async function RankingPage() {
       *,
       user_activity(activity_date)
     `)
+    .gt('points', 0)
     .order('points', { ascending: false })
     .limit(100);
 
@@ -29,6 +31,8 @@ export default async function RankingPage() {
     ...user,
     active_days: user.user_activity?.length || 0,
   })) || [];
+
+  const rankingMap = buildDenseRankingMap(users);
 
   return (
     <div className="pb-20">
@@ -47,7 +51,7 @@ export default async function RankingPage() {
           </div>
         ) : (
           users.map((u: User, index: number) => (
-            <RankingItem key={u.id} user={u} position={index + 1} />
+            <RankingItem key={u.id} user={u} position={rankingMap.get(u.id) || 0} />
           ))
         )}
       </div>
