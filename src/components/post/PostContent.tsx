@@ -80,7 +80,7 @@ export default function PostContent({ post, currentUserId, compact = false }: Po
   return (
     <>
       {/* Media */}
-      <div className="relative bg-gray-100 overflow-hidden max-h-[177.78vw] min-h-[56.25vw] flex items-center justify-center">
+      <div className="relative bg-gray-100 overflow-hidden max-h-[125vw] flex items-center justify-center">
         {post.media_type === 'video' ? (
           <video
             src={post.media_url}
