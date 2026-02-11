@@ -46,15 +46,16 @@ export default function ProfileHeader({
       return;
     }
 
-    // Get public URL
+    // Get public URL with cache-busting param
     const { data: { publicUrl } } = supabase.storage
       .from('avatars')
       .getPublicUrl(fileName);
+    const avatarUrl = `${publicUrl}?t=${Date.now()}`;
 
     // Update user profile
     const { error: updateError } = await supabase
       .from('users')
-      .update({ avatar_url: publicUrl })
+      .update({ avatar_url: avatarUrl })
       .eq('id', user.id);
 
     if (updateError) {

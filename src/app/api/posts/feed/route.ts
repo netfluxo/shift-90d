@@ -69,5 +69,9 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     posts: transformedPosts,
     hasMore: (posts?.length || 0) === limit,
+  }, {
+    headers: {
+      'Cache-Control': 'private, max-age=60, stale-while-revalidate=300',
+    },
   });
 }

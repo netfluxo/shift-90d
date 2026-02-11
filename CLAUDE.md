@@ -12,7 +12,7 @@ npm run lint     # Run ESLint
 
 ## Architecture
 
-Shift 90D is a mobile-first fitness activity social app built with Next.js 16 (App Router) and Supabase.
+Shift 90D is a fitness activity social app built with Next.js 16 (App Router) and Supabase. It's a mobile-focused web app accessed directly through the mobile browser (not a PWA).
 
 ### Tech Stack
 - **Framework**: Next.js 16 with App Router

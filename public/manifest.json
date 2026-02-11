@@ -1,0 +1,21 @@
+{
+  "name": "Shift 90D",
+  "short_name": "Shift 90D",
+  "description": "App de atividade fisica - Transforme seu corpo em 90 dias",
+  "start_url": "/feed",
+  "display": "standalone",
+  "background_color": "#0D3A5C",
+  "theme_color": "#1E5A8A",
+  "icons": [
+    {
+      "src": "/fav.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/fav.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
