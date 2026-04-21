@@ -6,7 +6,6 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
 
-    // Check authentication
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
@@ -16,11 +15,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Parse request body
     const body = await request.json();
     const { media_url, media_type, caption } = body;
 
-    // Validate input
     if (!media_url || !media_type) {
       return NextResponse.json(
         { success: false, error: 'Missing required fields: media_url and media_type' },
@@ -35,10 +32,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get today's date in Brazil timezone
     const todayInBrazil = getTodayInBrazil();
 
-    // Count posts created today (in Brazil timezone)
     const { count: todayPostsCount, error: countError } = await supabase
       .from('posts')
       .select('*', { count: 'exact', head: true })
@@ -57,7 +52,6 @@ export async function POST(request: NextRequest) {
     const dailyPostsCount = todayPostsCount || 0;
     const shouldAwardPoints = dailyPostsCount < 1;
 
-    // Insert the post
     const { data: post, error: postError } = await supabase
       .from('posts')
       .insert({
@@ -77,93 +71,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let pointsAwarded = false;
-
-    // Award points if under daily limit
     if (shouldAwardPoints) {
-      // Update user points
-      const { error: pointsError } = await supabase
-        .from('users')
-        .update({ points: supabase.rpc('increment_points', { increment: 1 }) })
-        .eq('id', user.id);
+      const { error: eventError } = await supabase
+        .from('point_events')
+        .insert({
+          user_id: user.id,
+          event_date: todayInBrazil,
+          source: 'post',
+          points_delta: 1,
+          post_id: post.id,
+        });
 
-      if (pointsError) {
-        // Use raw SQL since increment_points RPC might not exist
-        const { error: rawPointsError } = await supabase
-          .rpc('increment', {
-            row_id: user.id,
-            table_name: 'users',
-            column_name: 'points',
-            increment_by: 1
-          });
-
-        if (rawPointsError) {
-          // Fallback: manual increment
-          const { data: userData } = await supabase
-            .from('users')
-            .select('points')
-            .eq('id', user.id)
-            .single();
-
-          if (userData) {
-            await supabase
-              .from('users')
-              .update({ points: (userData.points || 0) + 1 })
-              .eq('id', user.id);
-          }
-        }
-      }
-
-      // Upsert user_activity record
-      const { error: activityError } = await supabase
-        .from('user_activity')
-        .upsert(
-          {
-            user_id: user.id,
-            activity_date: todayInBrazil,
-            posts_count: dailyPostsCount + 1,
-            points_earned: Math.min(dailyPostsCount + 1, 1), // Max 1 point per day
-            updated_at: new Date().toISOString(),
-          },
-          {
-            onConflict: 'user_id,activity_date',
-            ignoreDuplicates: false,
-          }
-        );
-
-      if (activityError) {
-        console.error('Error updating user_activity:', activityError);
-        // Don't fail the request, activity tracking is secondary
-      }
-
-      pointsAwarded = true;
-    } else {
-      // Still update activity count even if no points awarded
-      const { error: activityError } = await supabase
-        .from('user_activity')
-        .upsert(
-          {
-            user_id: user.id,
-            activity_date: todayInBrazil,
-            posts_count: dailyPostsCount + 1,
-            points_earned: 1, // Already at max
-            updated_at: new Date().toISOString(),
-          },
-          {
-            onConflict: 'user_id,activity_date',
-            ignoreDuplicates: false,
-          }
-        );
-
-      if (activityError) {
-        console.error('Error updating user_activity:', activityError);
+      if (eventError) {
+        console.error('Error inserting point_event:', eventError);
       }
     }
 
     return NextResponse.json({
       success: true,
       post,
-      points_awarded: pointsAwarded,
+      points_awarded: shouldAwardPoints,
       daily_posts_count: dailyPostsCount + 1,
       daily_limit_reached: dailyPostsCount + 1 >= 1,
     });

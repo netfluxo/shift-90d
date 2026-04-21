@@ -37,6 +37,15 @@ export default function PostCard({ post, currentUserId }: PostCardProps) {
   const handleDelete = async () => {
     if (!confirm('Tem certeza que deseja apagar esta publicação?')) return;
 
+    // Fecha o menu ANTES do await — Safari guarda um Range apontando pro botão
+    // clicado; se o nó for desmontado durante o await, disparamos um
+    // "Can't find variable: EmptyRanges" no cleanup interno do WebKit.
+    setShowMenu(false);
+    if (typeof document !== 'undefined') {
+      (document.activeElement as HTMLElement | null)?.blur();
+      window.getSelection()?.removeAllRanges();
+    }
+
     setIsDeleting(true);
     try {
       const response = await fetch(`/api/posts/${post.id}`, { method: 'DELETE' });
@@ -52,7 +61,6 @@ export default function PostCard({ post, currentUserId }: PostCardProps) {
       alert('Erro ao apagar publicação. Tente novamente.');
     }
     setIsDeleting(false);
-    setShowMenu(false);
   };
 
   return (

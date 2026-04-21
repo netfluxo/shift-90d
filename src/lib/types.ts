@@ -36,6 +36,17 @@ export interface Comment {
   user?: User;
 }
 
+export interface PointEvent {
+  id: string;
+  user_id: string;
+  event_date: string;
+  source: 'post' | 'saturday_attendance' | 'compensation';
+  points_delta: number;
+  post_id: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
 export interface Database {
   public: {
     Tables: {

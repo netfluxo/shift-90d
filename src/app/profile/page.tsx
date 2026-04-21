@@ -13,9 +13,9 @@ export default async function ProfilePage() {
     redirect('/login');
   }
 
-  // Fetch user profile
+  // Fetch user profile (pontos vêm do ledger via user_points_view)
   const { data: user } = await supabase
-    .from('users')
+    .from('user_points_view')
     .select('*')
     .eq('id', authUser.id)
     .single();
@@ -25,7 +25,7 @@ export default async function ProfilePage() {
     .from('posts')
     .select(`
       *,
-      user:users(id, name, avatar_url, points),
+      user:users(id, name, avatar_url),
       likes:likes(count),
       comments:comments(count)
     `)
@@ -42,7 +42,7 @@ export default async function ProfilePage() {
 
   // Fetch all users for dense ranking (used for posts and profile badge)
   const { data: allUsersForRanking } = await supabase
-    .from('users')
+    .from('user_points_view')
     .select('id, points')
     .order('points', { ascending: false });
 
@@ -88,7 +88,7 @@ export default async function ProfilePage() {
   if (uniqueDates.size > 0) {
     const sortedDates = Array.from(uniqueDates).sort().reverse();
     const today = new Date(todayInBrazil);
-    let checkDate = new Date(today);
+    const checkDate = new Date(today);
 
     // If no activity today, start checking from yesterday
     if (!uniqueDates.has(todayInBrazil)) {
@@ -132,9 +132,9 @@ export default async function ProfilePage() {
       console.error('Error creating user profile:', insertError);
     }
 
-    // Refetch
+    // Refetch via view (points/active_days vêm zerados via COALESCE)
     const { data: newUser } = await supabase
-      .from('users')
+      .from('user_points_view')
       .select('*')
       .eq('id', authUser.id)
       .single();

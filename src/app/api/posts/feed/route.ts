@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
 
   // Fetch user rankings
   const { data: allUsersRanking } = await supabase
-    .from('users')
+    .from('user_points_view')
     .select('id')
     .order('points', { ascending: false });
 
