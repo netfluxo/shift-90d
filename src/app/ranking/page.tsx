@@ -15,22 +15,14 @@ export default async function RankingPage() {
     redirect('/login');
   }
 
-  // Fetch users with active days count ordered by points
   const { data: usersData } = await supabase
-    .from('users')
-    .select(`
-      *,
-      user_activity(activity_date)
-    `)
+    .from('user_points_view')
+    .select('id, name, avatar_url, created_at, points, active_days')
     .gt('points', 0)
     .order('points', { ascending: false })
     .limit(100);
 
-  // Transform data to include active days count
-  const users = usersData?.map((user) => ({
-    ...user,
-    active_days: user.user_activity?.length || 0,
-  })) || [];
+  const users = usersData || [];
 
   const rankingMap = buildDenseRankingMap(users);
 
@@ -50,7 +42,7 @@ export default async function RankingPage() {
             <p className="text-gray-500">Comece a treinar para aparecer aqui!</p>
           </div>
         ) : (
-          users.map((u: User, index: number) => (
+          users.map((u: User) => (
             <RankingItem key={u.id} user={u} position={rankingMap.get(u.id) || 0} />
           ))
         )}

@@ -45,3 +45,9 @@ public/sw.js
 public/sw.js.map
 public/swe-worker-*.js
 public/swe-worker-*.js.map
+
+# snapshots locais — podem conter dados de usuários
+/backups
+
+# claude — só docs do projeto vão pro git
+.claude/settings.local.json

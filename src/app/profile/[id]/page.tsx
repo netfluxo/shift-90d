@@ -23,9 +23,9 @@ export default async function UserProfilePage({ params }: Props) {
     redirect('/profile');
   }
 
-  // Fetch user profile
+  // Fetch user profile (pontos vêm do ledger via user_points_view)
   const { data: user } = await supabase
-    .from('users')
+    .from('user_points_view')
     .select('*')
     .eq('id', id)
     .single();
@@ -39,7 +39,7 @@ export default async function UserProfilePage({ params }: Props) {
     .from('posts')
     .select(`
       *,
-      user:users(id, name, avatar_url, points),
+      user:users(id, name, avatar_url),
       likes:likes(count),
       comments:comments(count)
     `)
@@ -56,7 +56,7 @@ export default async function UserProfilePage({ params }: Props) {
 
   // Fetch all users for dense ranking (used for posts and profile badge)
   const { data: allUsersForRanking } = await supabase
-    .from('users')
+    .from('user_points_view')
     .select('id, points')
     .order('points', { ascending: false });
 
@@ -101,7 +101,7 @@ export default async function UserProfilePage({ params }: Props) {
   if (uniqueDates.size > 0) {
     const sortedDates = Array.from(uniqueDates).sort().reverse();
     const today = new Date(todayInBrazil);
-    let checkDate = new Date(today);
+    const checkDate = new Date(today);
 
     if (!uniqueDates.has(todayInBrazil)) {
       checkDate.setDate(checkDate.getDate() - 1);

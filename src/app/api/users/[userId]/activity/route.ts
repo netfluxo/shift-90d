@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { getTodayInBrazil } from '@/lib/utils/timezone';
+import { getDateInBrazil, getTodayInBrazil } from '@/lib/utils/timezone';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(
@@ -9,7 +9,6 @@ export async function GET(
   try {
     const supabase = await createClient();
 
-    // Check authentication
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
@@ -21,10 +20,10 @@ export async function GET(
 
     const { userId } = await params;
 
-    // Get user's total points
+    // Pontos e dias ativos — ledger via view
     const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('points')
+      .from('user_points_view')
+      .select('points, active_days')
       .eq('id', userId)
       .single();
 
@@ -35,10 +34,9 @@ export async function GET(
       );
     }
 
-    // Get today's date in Brazil
     const todayInBrazil = getTodayInBrazil();
 
-    // Count today's posts directly from posts table (more accurate)
+    // Posts de hoje (BRT)
     const { count: todayPostsCount, error: postsCountError } = await supabase
       .from('posts')
       .select('*', { count: 'exact', head: true })
@@ -50,66 +48,49 @@ export async function GET(
       console.error('Error counting today posts:', postsCountError);
     }
 
-    // Get today's activity for points earned info
-    const { data: todayActivity, error: todayError } = await supabase
-      .from('user_activity')
-      .select('posts_count, points_earned')
+    // Streak — derivado dos posts (mesma lógica do profile/page.tsx)
+    const { data: userPosts } = await supabase
+      .from('posts')
+      .select('created_at')
       .eq('user_id', userId)
-      .eq('activity_date', todayInBrazil)
-      .maybeSingle();
+      .order('created_at', { ascending: false });
 
-    // Get total active days (count distinct dates)
-    const { count: activeDays, error: activeDaysError } = await supabase
-      .from('user_activity')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId);
-
-    if (activeDaysError) {
-      console.error('Error counting active days:', activeDaysError);
-    }
-
-    // Calculate current streak (consecutive days from today backwards)
-    const { data: allActivity, error: allActivityError } = await supabase
-      .from('user_activity')
-      .select('activity_date')
-      .eq('user_id', userId)
-      .order('activity_date', { ascending: false })
-      .limit(365); // Last year should be enough
+    const uniqueDates = new Set<string>();
+    userPosts?.forEach((post) => {
+      uniqueDates.add(getDateInBrazil(new Date(post.created_at)));
+    });
 
     let currentStreak = 0;
-    if (allActivity && allActivity.length > 0) {
-      // Check if user has activity today or yesterday
+    if (uniqueDates.size > 0) {
+      const sortedDates = Array.from(uniqueDates).sort().reverse();
       const today = new Date(todayInBrazil);
-      let checkDate = new Date(today);
+      const checkDate = new Date(today);
 
-      // If no activity today, check from yesterday
-      const hasActivityToday = allActivity[0]?.activity_date === todayInBrazil;
-      if (!hasActivityToday) {
+      if (!uniqueDates.has(todayInBrazil)) {
         checkDate.setDate(checkDate.getDate() - 1);
       }
 
-      // Count consecutive days
-      for (const activity of allActivity) {
-        const activityDate = new Date(activity.activity_date);
+      for (const dateStr of sortedDates) {
         const checkDateStr = checkDate.toISOString().split('T')[0];
-
-        if (activity.activity_date === checkDateStr) {
+        if (dateStr === checkDateStr) {
           currentStreak++;
           checkDate.setDate(checkDate.getDate() - 1);
-        } else {
+        } else if (dateStr < checkDateStr) {
           break;
         }
       }
     }
 
+    const todayPosts = todayPostsCount || 0;
+
     return NextResponse.json({
       success: true,
       user_id: userId,
-      total_active_days: activeDays || 0,
+      total_active_days: userData.active_days || 0,
       current_streak: currentStreak,
       total_points: userData.points || 0,
-      today_posts: todayPostsCount || 0,
-      today_points: todayActivity?.points_earned || 0,
+      today_posts: todayPosts,
+      today_points: Math.min(todayPosts, 1),
     });
   } catch (error) {
     console.error('Unexpected error in GET /api/users/[userId]/activity:', error);

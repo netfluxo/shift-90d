@@ -19,7 +19,6 @@ export async function DELETE(
       );
     }
 
-    // Fetch the post to verify ownership and get its date
     const { data: post, error: fetchError } = await supabase
       .from('posts')
       .select('id, user_id, created_at')
@@ -42,7 +41,6 @@ export async function DELETE(
 
     const postDateBrazil = getDateInBrazil(new Date(post.created_at));
 
-    // Delete the post (likes and comments cascade via FK)
     const { error: deleteError } = await supabase
       .from('posts')
       .delete()
@@ -56,47 +54,74 @@ export async function DELETE(
       );
     }
 
-    // Count remaining posts for that day
-    const { count: remainingPosts } = await supabase
+    // Busca posts restantes do mesmo dia (para decidir entre remover ponto ou realocar)
+    const { data: remainingDayPosts } = await supabase
       .from('posts')
-      .select('*', { count: 'exact', head: true })
+      .select('id, created_at')
       .eq('user_id', user.id)
       .gte('created_at', `${postDateBrazil}T00:00:00-03:00`)
-      .lt('created_at', `${postDateBrazil}T23:59:59.999-03:00`);
+      .lt('created_at', `${postDateBrazil}T23:59:59.999-03:00`)
+      .order('created_at', { ascending: true });
 
-    const remaining = remainingPosts || 0;
+    const remainingPosts = remainingDayPosts?.length || 0;
 
-    if (remaining === 0) {
-      // No posts left that day — remove the point
-      const { data: userData } = await supabase
-        .from('users')
-        .select('points')
-        .eq('id', user.id)
-        .single();
+    if (remainingPosts === 0) {
+      // Nenhum post sobrou no dia — remove o ponto (se havia).
+      // Só insere negativo se o saldo do dia for > 0, evita negativo órfão
+      // quando o post nunca gerou evento positivo (ex: falha antiga de RLS).
+      const { data: dayEvents } = await supabase
+        .from('point_events')
+        .select('points_delta')
+        .eq('user_id', user.id)
+        .eq('event_date', postDateBrazil)
+        .eq('source', 'post');
 
-      if (userData && userData.points > 0) {
-        await supabase
-          .from('users')
-          .update({ points: userData.points - 1 })
-          .eq('id', user.id);
+      const daySum = (dayEvents || []).reduce((acc, e) => acc + e.points_delta, 0);
+
+      if (daySum > 0) {
+        // post_id fica null: o post já foi deletado e o FK rejeitaria a inserção.
+        const { error: eventError } = await supabase
+          .from('point_events')
+          .insert({
+            user_id: user.id,
+            event_date: postDateBrazil,
+            source: 'post',
+            points_delta: -1,
+            post_id: null,
+            notes: `post deleted (id=${postId})`,
+          });
+
+        if (eventError) {
+          console.error('Error inserting point_event:', eventError);
+        }
       }
-
-      // Delete the activity record for that day
-      await supabase
-        .from('user_activity')
-        .delete()
-        .eq('user_id', user.id)
-        .eq('activity_date', postDateBrazil);
     } else {
-      // Still has posts that day — update activity count
-      await supabase
-        .from('user_activity')
-        .update({
-          posts_count: remaining,
-          updated_at: new Date().toISOString(),
-        })
+      // Ainda há posts no dia — se o evento de ponto apontava pro post deletado,
+      // realoca para o post restante mais antigo, preservando o link de auditoria.
+      // ON DELETE SET NULL já zerou o post_id; procuramos o evento órfão.
+      const { data: orphanEvent } = await supabase
+        .from('point_events')
+        .select('id')
         .eq('user_id', user.id)
-        .eq('activity_date', postDateBrazil);
+        .eq('event_date', postDateBrazil)
+        .eq('source', 'post')
+        .eq('points_delta', 1)
+        .is('post_id', null)
+        .maybeSingle();
+
+      if (orphanEvent) {
+        const { error: updateError } = await supabase
+          .from('point_events')
+          .update({
+            post_id: remainingDayPosts![0].id,
+            notes: `relinked after delete of ${postId}`,
+          })
+          .eq('id', orphanEvent.id);
+
+        if (updateError) {
+          console.error('Error relinking point_event:', updateError);
+        }
+      }
     }
 
     return NextResponse.json({ success: true });

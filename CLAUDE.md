@@ -2,6 +2,26 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Contexto do produto
+
+**Cliente**: Yuri — educador físico que oferece serviços de educação física corporativa (aulas e programas de atividade física dentro de empresas).
+
+**Produto**: Shift 90D — app social de acompanhamento de atividade física para os participantes dos programas do Yuri. A mecânica central é simples: os participantes postam fotos das suas atividades físicas e acumulam pontos. O ranking gera engajamento e competição saudável entre colegas de empresa.
+
+**Usuários**: funcionários das empresas atendidas pelo Yuri. Acesso via mobile browser — sem instalação.
+
+**Fluxo principal**:
+1. Usuário faz login (conta criada pelo admin/Yuri)
+2. Posta foto de atividade física com legenda
+3. Recebe pontos pelo post
+4. Curte e comenta posts de outros participantes
+5. Acompanha o ranking de pontos
+
+**Regras de negócio relevantes**:
+- Posts de foto/vídeo geram pontos para o usuário (`users.points`)
+- O ranking é ordenado por pontos decrescentes
+- Cada usuário tem um perfil com histórico de posts e pontuação
+
 ## Commands
 
 ```bash

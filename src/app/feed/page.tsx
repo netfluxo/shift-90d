@@ -33,7 +33,7 @@ export default async function FeedPage() {
 
   // Fetch user rankings
   const { data: allUsersRanking } = await supabase
-    .from('users')
+    .from('user_points_view')
     .select('id')
     .order('points', { ascending: false });
 
