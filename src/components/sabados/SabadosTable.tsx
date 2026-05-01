@@ -96,14 +96,14 @@ export default function SabadosTable({
 
       <div className="flex items-center gap-2 px-4 py-3 border-b">
         <Select
-          value={dateFilterValue || '__all__'}
-          onValueChange={v => table.getColumn('event_date')?.setFilterValue(v === '__all__' ? '' : v)}
+          value={dateFilterValue}
+          onValueChange={v => table.getColumn('event_date')?.setFilterValue(v)}
         >
           <SelectTrigger className="w-36">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__">Todas as datas</SelectItem>
+            <SelectItem value="">Todas as datas</SelectItem>
             {uniqueDates.map(d => (
               <SelectItem key={d} value={d}>{formatDate(d)}</SelectItem>
             ))}
@@ -111,14 +111,14 @@ export default function SabadosTable({
         </Select>
 
         <Select
-          value={nameFilterValue || '__all__'}
-          onValueChange={v => table.getColumn('name')?.setFilterValue(v === '__all__' ? '' : v)}
+          value={nameFilterValue}
+          onValueChange={v => table.getColumn('name')?.setFilterValue(v)}
         >
           <SelectTrigger className="w-48">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__">Todos os usuários</SelectItem>
+            <SelectItem value="">Todos os usuários</SelectItem>
             {uniqueNames.map(n => (
               <SelectItem key={n} value={n}>{n}</SelectItem>
             ))}
