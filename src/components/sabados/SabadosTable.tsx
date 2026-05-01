@@ -15,7 +15,6 @@ import {
   Table, TableBody, TableCell, TableHead,
   TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
   Select, SelectContent, SelectItem,
@@ -41,6 +40,9 @@ export default function SabadosTable({
 
   const uniqueDates = Array.from(new Set(rows.map(r => r.event_date)))
     .sort((a, b) => b.localeCompare(a));
+
+  const uniqueNames = Array.from(new Set(rows.map(r => getName(r.users)).filter(Boolean)))
+    .sort((a, b) => a.localeCompare(b));
 
   const columns = getColumns(isAdmin, setConfirmId);
 
@@ -94,26 +96,34 @@ export default function SabadosTable({
 
       <div className="flex items-center gap-2 px-4 py-3 border-b">
         <Select
-          value={dateFilterValue || 'all'}
-          onValueChange={v => table.getColumn('event_date')?.setFilterValue(v === 'all' ? '' : v)}
+          value={dateFilterValue || '__all__'}
+          onValueChange={v => table.getColumn('event_date')?.setFilterValue(v === '__all__' ? '' : v)}
         >
           <SelectTrigger className="w-36">
-            <SelectValue placeholder="Todos" />
+            <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="__all__">Todas as datas</SelectItem>
             {uniqueDates.map(d => (
               <SelectItem key={d} value={d}>{formatDate(d)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
 
-        <Input
-          placeholder="Filtrar usuário..."
-          value={nameFilterValue}
-          onChange={e => table.getColumn('name')?.setFilterValue(e.target.value)}
-          className="max-w-48"
-        />
+        <Select
+          value={nameFilterValue || '__all__'}
+          onValueChange={v => table.getColumn('name')?.setFilterValue(v === '__all__' ? '' : v)}
+        >
+          <SelectTrigger className="w-48">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">Todos os usuários</SelectItem>
+            {uniqueNames.map(n => (
+              <SelectItem key={n} value={n}>{n}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <Table>
@@ -121,7 +131,7 @@ export default function SabadosTable({
           {table.getHeaderGroups().map(hg => (
             <TableRow key={hg.id} className="hover:bg-transparent">
               {hg.headers.map(header => (
-                <TableHead key={header.id} className={header.column.id === 'event_date' ? 'pl-2' : header.column.id === 'actions' ? 'w-10' : ''}>
+                <TableHead key={header.id} className={header.column.id === 'event_date' ? 'pl-4' : header.column.id === 'actions' ? 'w-10' : ''}>
                   {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                 </TableHead>
               ))}
