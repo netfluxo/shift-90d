@@ -2,66 +2,62 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Trash2 } from 'lucide-react';
+import {
+  flexRender,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type ColumnFiltersState,
+  type SortingState,
+} from '@tanstack/react-table';
 import {
   Table, TableBody, TableCell, TableHead,
   TableHeader, TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import {
+  Select, SelectContent, SelectItem,
+  SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
+import { getColumns, getName, formatDate, type SabadoRow } from './columns';
 
-type Row = {
-  id: string;
-  event_date: string;
-  points_delta: number;
-  users: { name: string } | { name: string }[] | null;
-};
-
-type SortKey = 'event_date' | 'name';
-type SortDir = 'asc' | 'desc';
-
-function getName(users: Row['users']): string {
-  if (!users) return '';
-  if (Array.isArray(users)) return users[0]?.name ?? '';
-  return users.name;
-}
-
-function formatDate(d: string) {
-  const [y, m, day] = d.split('-');
-  return `${day}/${m}/${y}`;
-}
-
-export default function SabadosTable({ rows }: { rows: Row[] }) {
+export default function SabadosTable({
+  rows,
+  isAdmin,
+}: {
+  rows: SabadoRow[];
+  isAdmin: boolean;
+}) {
   const router = useRouter();
-  const [sortKey, setSortKey] = useState<SortKey>('event_date');
-  const [sortDir, setSortDir] = useState<SortDir>('desc');
-  const [deleting, setDeleting] = useState<string | null>(null);
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'event_date', desc: true }]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
-  function handleSort(key: SortKey) {
-    if (key === sortKey) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    else { setSortKey(key); setSortDir('asc'); }
-  }
+  const uniqueDates = Array.from(new Set(rows.map(r => r.event_date)))
+    .sort((a, b) => b.localeCompare(a));
 
-  const sorted = [...rows].sort((a, b) => {
-    let cmp = 0;
-    if (sortKey === 'event_date') cmp = a.event_date.localeCompare(b.event_date);
-    else cmp = getName(a.users).localeCompare(getName(b.users));
-    return sortDir === 'asc' ? cmp : -cmp;
+  const uniqueNames = Array.from(new Set(rows.map(r => getName(r.users)).filter(Boolean)))
+    .sort((a, b) => a.localeCompare(b));
+
+  const columns = getColumns(isAdmin, setConfirmId);
+
+  const table = useReactTable({
+    data: rows,
+    columns,
+    state: { sorting, columnFilters },
+    onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
   });
 
   const confirmRow = rows.find(r => r.id === confirmId);
-
-  // Assign a group index per unique date (for zebra striping)
-  const dateGroupIndex: Record<string, number> = {};
-  let groupCounter = 0;
-  for (const row of sorted) {
-    if (!(row.event_date in dateGroupIndex)) {
-      dateGroupIndex[row.event_date] = groupCounter++;
-    }
-  }
 
   async function handleDelete() {
     if (!confirmId) return;
@@ -76,75 +72,104 @@ export default function SabadosTable({ rows }: { rows: Row[] }) {
     router.refresh();
   }
 
-  function SortIcon({ k }: { k: SortKey }) {
-    if (k !== sortKey) return <span className="ml-1 text-muted-foreground/40">↕</span>;
-    return <span className="ml-1">{sortDir === 'asc' ? '↑' : '↓'}</span>;
-  }
+  const dateFilterValue = (table.getColumn('event_date')?.getFilterValue() as string) ?? '';
+  const nameFilterValue = (table.getColumn('name')?.getFilterValue() as string) ?? '';
 
   return (
     <>
-    <Dialog open={!!confirmId} onOpenChange={v => { if (!v) setConfirmId(null); }}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>Remover presença</DialogTitle>
-        </DialogHeader>
-        <p className="text-sm text-muted-foreground">
-          Remover <span className="font-medium text-foreground">{getName(confirmRow?.users ?? null)}</span> do sábado{' '}
-          <span className="font-medium text-foreground">{confirmRow ? formatDate(confirmRow.event_date) : ''}</span>?
-          <br />Esta ação não pode ser desfeita.
-        </p>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setConfirmId(null)}>Cancelar</Button>
-          <Button variant="destructive" onClick={handleDelete}>Remover</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-    <Table>
-      <TableHeader>
-        <TableRow className="hover:bg-transparent">
-          <TableHead className="cursor-pointer select-none pl-4 hover:text-foreground" onClick={() => handleSort('event_date')}>
-            Data <SortIcon k="event_date" />
-          </TableHead>
-          <TableHead className="cursor-pointer select-none hover:text-foreground" onClick={() => handleSort('name')}>
-            Usuário <SortIcon k="name" />
-          </TableHead>
-          <TableHead className="w-10" />
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {sorted.length === 0 && (
-          <TableRow>
-            <TableCell colSpan={4} className="text-center text-muted-foreground py-10">
-              Nenhum registro encontrado.
-            </TableCell>
-          </TableRow>
-        )}
-        {sorted.map((row) => {
-          const isEvenGroup = dateGroupIndex[row.event_date] % 2 === 0;
-          return (
-            <TableRow key={row.id} className={isEvenGroup ? '' : 'bg-muted/40 hover:bg-muted/60'}>
-              <TableCell className="pl-4 text-muted-foreground whitespace-nowrap">
-                {formatDate(row.event_date)}
-              </TableCell>
-              <TableCell className="font-medium">
-                {getName(row.users) || '—'}
-              </TableCell>
-              <TableCell className="pr-2">
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="text-muted-foreground hover:text-destructive"
-                  disabled={deleting === row.id}
-                  onClick={() => setConfirmId(row.id)}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
+      <Dialog open={!!confirmId} onOpenChange={v => { if (!v) setConfirmId(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Remover presença</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Remover <span className="font-medium text-foreground">{getName(confirmRow?.users ?? null)}</span> do sábado{' '}
+            <span className="font-medium text-foreground">{confirmRow ? formatDate(confirmRow.event_date) : ''}</span>?
+            <br />Esta ação não pode ser desfeita.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmId(null)}>Cancelar</Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={!!deleting}>Remover</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <div className="flex items-center gap-3 px-4 py-3 border-b">
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground font-medium">Data</span>
+          <Select
+            value={dateFilterValue}
+            onValueChange={v => table.getColumn('event_date')?.setFilterValue(v)}
+          >
+            <SelectTrigger className="w-36">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">Todas as datas</SelectItem>
+              {uniqueDates.map(d => (
+                <SelectItem key={d} value={d}>{formatDate(d)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground font-medium">Usuário</span>
+          <Select
+            value={nameFilterValue}
+            onValueChange={v => table.getColumn('name')?.setFilterValue(v)}
+          >
+            <SelectTrigger className="w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">Todos os usuários</SelectItem>
+              {uniqueNames.map(n => (
+                <SelectItem key={n} value={n}>{n}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <Table>
+        <TableHeader>
+          {table.getHeaderGroups().map(hg => (
+            <TableRow key={hg.id} className="hover:bg-transparent">
+              {hg.headers.map(header => (
+                <TableHead key={header.id} className={header.column.id === 'event_date' ? 'pl-4' : header.column.id === 'actions' ? 'w-10' : ''}>
+                  {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                </TableHead>
+              ))}
+            </TableRow>
+          ))}
+        </TableHeader>
+        <TableBody>
+          {table.getRowModel().rows.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
+                Nenhum registro encontrado.
               </TableCell>
             </TableRow>
-          );
-        })}
-      </TableBody>
-    </Table>
+          ) : (
+            table.getRowModel().rows.map(row => (
+              <TableRow key={row.id}>
+                {row.getVisibleCells().map(cell => (
+                  <TableCell
+                    key={cell.id}
+                    className={
+                      cell.column.id === 'event_date' ? 'pl-4' :
+                      cell.column.id === 'actions' ? 'pr-2 text-right' : ''
+                    }
+                  >
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
     </>
   );
 }

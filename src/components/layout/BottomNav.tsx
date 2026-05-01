@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/client';
 const navItems = [
   { href: '/feed', label: 'Feed', icon: HomeIcon, adminOnly: false },
   { href: '/ranking', label: 'Ranking', icon: TrophyIcon, adminOnly: false },
-  { href: '/sabados', label: 'Sábados', icon: CalendarIcon, adminOnly: true },
+  { href: '/sabados', label: 'Sábados', icon: CalendarIcon, adminOnly: false },
   { href: '/profile', label: 'Perfil', icon: UserIcon, adminOnly: false },
 ];
 
