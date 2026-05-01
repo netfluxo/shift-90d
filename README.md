@@ -1,36 +1,77 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Shift 90D
 
-## Getting Started
+App social de acompanhamento de atividade física para participantes dos programas de educação física corporativa do Yuri. Os usuários postam fotos das suas atividades, acumulam pontos e competem no ranking com colegas de empresa.
 
-First, run the development server:
+Mobile-first web app — acesso direto pelo browser, sem instalação.
+
+## Stack
+
+- **Framework**: Next.js 16 (App Router) + React 19
+- **Database / Auth / Storage**: Supabase (PostgreSQL)
+- **Styling**: Tailwind CSS v4
+- **State**: Zustand
+- **Service Worker**: Serwist
+- **Language**: TypeScript
+
+## Setup
+
+Pré-requisitos: Node.js 20+ e um projeto Supabase configurado.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Crie um `.env.local` na raiz:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Aplique o schema do banco a partir de `supabase-migrations/` (ou `supabase-reset.sql` para um reset completo). Buckets de storage necessários: `posts` e `avatars`.
 
-## Learn More
+## Scripts
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm run dev      # dev server em localhost:3000
+npm run build    # build de produção (webpack)
+npm run start    # serve o build
+npm run lint     # ESLint
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Estrutura
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+src/
+├── app/
+│   ├── (auth)/           # login, signup
+│   ├── feed/             # feed principal
+│   ├── ranking/          # leaderboard por pontos
+│   └── profile/          # perfil próprio + [id]
+├── components/
+│   ├── layout/           # BottomNav
+│   ├── post/             # PostCard, CreatePost, CommentSection
+│   ├── profile/          # ProfileHeader
+│   └── ranking/          # RankingItem
+├── lib/
+│   ├── supabase/         # client.ts (browser), server.ts (SSR)
+│   └── types.ts
+└── middleware.ts         # protege /feed, /ranking, /profile
+```
 
-## Deploy on Vercel
+## Modelo de dados
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Tabelas principais: `users`, `posts`, `likes`, `comments`, `point_events` (ledger — fonte de verdade para pontos).
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Pontos são acumulados via `point_events` e refletidos em `users.points`. O ranking ordena por `users.points` desc.
+
+## Fluxo principal
+
+1. Login (contas criadas pelo admin)
+2. Post de foto/vídeo de atividade física com legenda → gera `point_event`
+3. Curtidas e comentários nos posts dos colegas
+4. Ranking atualizado por empresa
+
+## Deploy
+
+Vercel. Configurar as env vars `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` no projeto.
