@@ -9,9 +9,11 @@ export default async function SabadosPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user || user.email !== 'admin@admin.com') {
-    redirect('/feed');
+  if (!user) {
+    redirect('/login');
   }
+
+  const isAdmin = user.email === 'admin@admin.com';
 
   const [{ data: rows }, { data: users }] = await Promise.all([
     supabase
@@ -32,9 +34,9 @@ export default async function SabadosPage() {
         <div className="rounded-xl border bg-card overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b">
             <span className="text-sm font-medium text-muted-foreground">Presenças registradas</span>
-            <AddSabadoButton users={users ?? []} />
+            {isAdmin && <AddSabadoButton users={users ?? []} />}
           </div>
-          <SabadosTable rows={rows ?? []} />
+          <SabadosTable rows={rows ?? []} isAdmin={isAdmin} />
         </div>
       </main>
       <BottomNav />
