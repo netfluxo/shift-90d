@@ -42,14 +42,14 @@ export default function SabadosTable({ rows, isAdmin }: { rows: Row[]; isAdmin: 
   const uniqueDates = Array.from(new Set(rows.map(r => r.event_date)))
     .sort((a, b) => b.localeCompare(a));
 
-  const [selectedDate, setSelectedDate] = useState<string>(uniqueDates[0] ?? '');
+  const [selectedDate, setSelectedDate] = useState<string>('');
   const [sortKey] = useState<SortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [deleting, setDeleting] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const filtered = rows
-    .filter(r => r.event_date === selectedDate)
+    .filter(r => !selectedDate || r.event_date === selectedDate)
     .sort((a, b) => {
       const cmp = getName(a.users).localeCompare(getName(b.users));
       return sortDir === 'asc' ? cmp : -cmp;
@@ -90,11 +90,12 @@ export default function SabadosTable({ rows, isAdmin }: { rows: Row[]; isAdmin: 
       </Dialog>
 
       <div className="flex items-center justify-between px-4 py-3 border-b">
-        <Select value={selectedDate} onValueChange={v => setSelectedDate(v ?? '')}>
+        <Select value={selectedDate} onValueChange={v => setSelectedDate(v === 'all' ? '' : (v ?? ''))}>
           <SelectTrigger className="w-40">
-            <SelectValue placeholder="Selecione..." />
+            <SelectValue placeholder="Todos os sábados" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
             {uniqueDates.map(d => (
               <SelectItem key={d} value={d}>{formatDate(d)}</SelectItem>
             ))}
@@ -110,17 +111,27 @@ export default function SabadosTable({ rows, isAdmin }: { rows: Row[]; isAdmin: 
       </div>
 
       <Table>
+        <TableHeader>
+          <TableRow className="hover:bg-transparent">
+            <TableHead className="pl-4">Data</TableHead>
+            <TableHead>Usuário</TableHead>
+            {isAdmin && <TableHead className="w-10" />}
+          </TableRow>
+        </TableHeader>
         <TableBody>
           {filtered.length === 0 && (
             <TableRow>
-              <TableCell colSpan={2} className="text-center text-muted-foreground py-10">
-                Nenhum registro para este sábado.
+              <TableCell colSpan={isAdmin ? 3 : 2} className="text-center text-muted-foreground py-10">
+                Nenhum registro encontrado.
               </TableCell>
             </TableRow>
           )}
           {filtered.map((row) => (
             <TableRow key={row.id}>
-              <TableCell className="pl-4 font-medium">
+              <TableCell className="pl-4 text-muted-foreground whitespace-nowrap">
+                {formatDate(row.event_date)}
+              </TableCell>
+              <TableCell className="font-medium">
                 {getName(row.users) || '—'}
               </TableCell>
               {isAdmin && (
