@@ -6,6 +6,7 @@ import PostModal from '@/components/post/PostModal';
 import { createClient } from '@/lib/supabase/client';
 import { Post, User } from '@/lib/types';
 import Image from 'next/image';
+import { getAvatarUrl } from '@/lib/utils/avatar';
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 
@@ -149,7 +150,7 @@ export default function ProfileClient({
                   <div className="w-full h-full rounded-full overflow-hidden bg-gray-200">
                     {user.avatar_url ? (
                       <Image
-                        src={user.avatar_url}
+                        src={getAvatarUrl(user.avatar_url, 96)!}
                         alt={user.name}
                         width={96}
                         height={96}

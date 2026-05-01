@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { User } from '@/lib/types';
+import { getAvatarUrl } from '@/lib/utils/avatar';
 
 interface RankingItemProps {
   user: User & { active_days?: number };
@@ -63,7 +64,7 @@ export default function RankingItem({ user, position }: RankingItemProps) {
           <div className={`shrink-0 w-14 h-14 rounded-full overflow-hidden ${isTopThree && style ? style.avatarRing : 'ring-2 ring-gray-200'}`}>
             {user.avatar_url ? (
               <Image
-                src={user.avatar_url}
+                src={getAvatarUrl(user.avatar_url, 56)!}
                 alt={user.name}
                 width={56}
                 height={56}

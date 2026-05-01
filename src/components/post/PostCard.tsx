@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { Post } from '@/lib/types';
+import { getAvatarUrl } from '@/lib/utils/avatar';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import PostContent from './PostContent';
@@ -71,7 +72,7 @@ export default function PostCard({ post, currentUserId }: PostCardProps) {
           <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden">
             {post.user?.avatar_url ? (
               <Image
-                src={post.user.avatar_url}
+                src={getAvatarUrl(post.user.avatar_url, 40)!}
                 alt={post.user.name}
                 width={40}
                 height={40}
