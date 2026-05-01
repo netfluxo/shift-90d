@@ -94,36 +94,42 @@ export default function SabadosTable({
         </DialogContent>
       </Dialog>
 
-      <div className="flex items-center gap-2 px-4 py-3 border-b">
-        <Select
-          value={dateFilterValue}
-          onValueChange={v => table.getColumn('event_date')?.setFilterValue(v)}
-        >
-          <SelectTrigger className="w-36">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">Todas as datas</SelectItem>
-            {uniqueDates.map(d => (
-              <SelectItem key={d} value={d}>{formatDate(d)}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="flex items-center gap-3 px-4 py-3 border-b">
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground font-medium">Data</span>
+          <Select
+            value={dateFilterValue}
+            onValueChange={v => table.getColumn('event_date')?.setFilterValue(v)}
+          >
+            <SelectTrigger className="w-36">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">Todas as datas</SelectItem>
+              {uniqueDates.map(d => (
+                <SelectItem key={d} value={d}>{formatDate(d)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-        <Select
-          value={nameFilterValue}
-          onValueChange={v => table.getColumn('name')?.setFilterValue(v)}
-        >
-          <SelectTrigger className="w-48">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">Todos os usuários</SelectItem>
-            {uniqueNames.map(n => (
-              <SelectItem key={n} value={n}>{n}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground font-medium">Usuário</span>
+          <Select
+            value={nameFilterValue}
+            onValueChange={v => table.getColumn('name')?.setFilterValue(v)}
+          >
+            <SelectTrigger className="w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">Todos os usuários</SelectItem>
+              {uniqueNames.map(n => (
+                <SelectItem key={n} value={n}>{n}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <Table>
