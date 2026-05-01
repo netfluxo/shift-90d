@@ -2,6 +2,7 @@
 
 import { Post } from '@/lib/types';
 import Image from 'next/image';
+import { getAvatarUrl } from '@/lib/utils/avatar';
 import Link from 'next/link';
 import PostContent from './PostContent';
 
@@ -51,7 +52,7 @@ export default function PostModal({ post, currentUserId, onClose }: PostModalPro
             <div className={`w-10 h-10 rounded-full bg-gray-200 overflow-hidden ${getAvatarRingClass()}`}>
               {post.user?.avatar_url ? (
                 <Image
-                  src={post.user.avatar_url}
+                  src={getAvatarUrl(post.user.avatar_url, 40)!}
                   alt={post.user.name}
                   width={40}
                   height={40}

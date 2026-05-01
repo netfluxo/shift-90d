@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/client';
 import { Comment } from '@/lib/types';
 import Image from 'next/image';
+import { getAvatarUrl } from '@/lib/utils/avatar';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
@@ -112,7 +113,7 @@ export default function CommentSection({ postId, currentUserId, onClose }: Comme
                 <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden shrink-0">
                   {comment.user?.avatar_url ? (
                     <Image
-                      src={comment.user.avatar_url}
+                      src={getAvatarUrl(comment.user.avatar_url, 32)!}
                       alt={comment.user.name}
                       width={32}
                       height={32}

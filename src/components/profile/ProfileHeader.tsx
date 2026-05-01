@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import Image from 'next/image';
 import { User } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
+import { getAvatarUrl } from '@/lib/utils/avatar';
 
 interface ProfileHeaderProps {
   user: User;
@@ -112,7 +113,7 @@ export default function ProfileHeader({
           >
             {user.avatar_url ? (
               <Image
-                src={user.avatar_url}
+                src={getAvatarUrl(user.avatar_url, 80)!}
                 alt={user.name}
                 width={80}
                 height={80}
