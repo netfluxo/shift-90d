@@ -36,7 +36,7 @@ export default async function SabadosPage() {
             <span className="text-sm font-medium text-muted-foreground">Presenças registradas</span>
             {isAdmin && <AddSabadoButton users={users ?? []} />}
           </div>
-          <SabadosTable rows={rows ?? []} />
+          <SabadosTable rows={rows ?? []} isAdmin={isAdmin} />
         </div>
       </main>
       <BottomNav />

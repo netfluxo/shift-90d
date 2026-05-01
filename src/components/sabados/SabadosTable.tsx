@@ -36,7 +36,7 @@ function formatDate(d: string) {
   return `${day}/${m}/${y}`;
 }
 
-export default function SabadosTable({ rows }: { rows: Row[] }) {
+export default function SabadosTable({ rows, isAdmin }: { rows: Row[]; isAdmin: boolean }) {
   const router = useRouter();
 
   const uniqueDates = Array.from(new Set(rows.map(r => r.event_date)))
@@ -123,17 +123,19 @@ export default function SabadosTable({ rows }: { rows: Row[] }) {
               <TableCell className="pl-4 font-medium">
                 {getName(row.users) || '—'}
               </TableCell>
-              <TableCell className="pr-2 text-right">
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="text-muted-foreground hover:text-destructive"
-                  disabled={deleting === row.id}
-                  onClick={() => setConfirmId(row.id)}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              </TableCell>
+              {isAdmin && (
+                <TableCell className="pr-2 text-right">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-destructive"
+                    disabled={deleting === row.id}
+                    onClick={() => setConfirmId(row.id)}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </TableCell>
+              )}
             </TableRow>
           ))}
         </TableBody>
