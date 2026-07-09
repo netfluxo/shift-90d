@@ -51,3 +51,11 @@ public/swe-worker-*.js.map
 
 # claude — só docs do projeto vão pro git
 .claude/settings.local.json
+
+# Generated seed (contains password hash)
+scripts/seed.sql
+
+# Cloudflare / OpenNext
+.open-next/
+.wrangler/
+cloudflare-env.d.ts

@@ -1,0 +1,42 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "shift90d-worker",
+	"main": ".open-next/worker.js",
+	"compatibility_date": "2025-06-01",
+	"compatibility_flags": ["nodejs_compat"],
+	"vars": {
+		"NEXT_PUBLIC_R2_PUBLIC_URL": "https://pub-1aed824bdf3a40d3a22f6042d9a75d2b.r2.dev"
+	},
+	"assets": {
+		"directory": ".open-next/assets",
+		"binding": "ASSETS"
+	},
+	"services": [
+		{
+			"binding": "WORKER_SELF_REFERENCE",
+			"service": "shift90d-worker"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "NEXT_INC_CACHE_R2_BUCKET",
+			"bucket_name": "shift90d-cache"
+		},
+		{
+			"binding": "PHOTOS_BUCKET",
+			"bucket_name": "shift90d-photos"
+		}
+	],
+	"d1_databases": [
+		{
+			"binding": "NEXT_TAG_CACHE_D1",
+			"database_name": "shift90d-cache",
+			"database_id": "2eefd7f4-8ba7-47c4-ac77-2a09b9b85aff"
+		},
+		{
+			"binding": "DB",
+			"database_name": "shift90d",
+			"database_id": "a7b9580e-b19c-4c03-837e-070ff9adb885"
+		}
+	]
+}
