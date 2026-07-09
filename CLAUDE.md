@@ -32,11 +32,13 @@ npm run lint     # Run ESLint
 
 ## Architecture
 
-Shift 90D is a fitness activity social app built with Next.js 16 (App Router) and Supabase. It's a mobile-focused web app accessed directly through the mobile browser (not a PWA).
+Shift 90D is a fitness activity social app built with Next.js 16 (App Router) deployed on Cloudflare Workers. It's a mobile-focused web app accessed directly through the mobile browser (not a PWA).
 
 ### Tech Stack
-- **Framework**: Next.js 16 with App Router
-- **Database/Auth/Storage**: Supabase (PostgreSQL + Auth + Storage)
+- **Framework**: Next.js 16 with App Router, deployed via `@opennextjs/cloudflare`
+- **Database**: Cloudflare D1 (SQLite) via Drizzle ORM
+- **Auth**: Better Auth (credentials/email+password, no public signup — accounts created by admin)
+- **Storage**: Cloudflare R2 (bucket `PHOTOS_BUCKET`), image resize done client-side before upload
 - **Styling**: Tailwind CSS v4 with CSS variables
 - **State**: Zustand
 - **Language**: TypeScript
@@ -46,41 +48,51 @@ Shift 90D is a fitness activity social app built with Next.js 16 (App Router) an
 ```
 src/
 ├── app/
-│   ├── (auth)/           # Auth pages (login, signup) - grouped route
+│   ├── (auth)/           # Login page (signup redirects to /login — no public signup)
+│   ├── api/auth/[...all]/ # Better Auth catch-all route handler
+│   ├── api/upload/       # R2 upload endpoint (post media + avatars)
 │   ├── feed/             # Main feed with posts
 │   ├── ranking/          # Leaderboard by points
 │   └── profile/          # User profile (own + [id] for others)
 ├── components/
 │   ├── layout/           # BottomNav
 │   ├── post/             # PostCard, CreatePost, CommentSection
-│   ├── profile/          # ProfileHeader
 │   └── ranking/          # RankingItem
 └── lib/
-    ├── supabase/         # Supabase clients (client.ts, server.ts)
+    ├── auth/             # server.ts (getAuth, per-request), client.ts (signIn/signOut/useSession)
+    ├── db/
+    │   ├── client.ts     # getDb/getDbAsync — per-request Drizzle client over D1 binding
+    │   ├── schema.ts     # Drizzle schema (domain tables + Better Auth tables)
+    │   └── queries/      # users, posts, likes, comments, point-events query modules
+    ├── utils/image-resize.ts # client-side resize before upload (replaces old CDN transform)
     └── types.ts          # TypeScript interfaces
 ```
 
 ### Key Patterns
 
-**Supabase Clients**:
-- `lib/supabase/client.ts` - Browser client using `createBrowserClient`
-- `lib/supabase/server.ts` - Server client using `createServerClient` with cookies
+**D1/Drizzle client** (`lib/db/client.ts`): instantiated **per request** via `getCloudflareContext()` + React `cache()` — never a module-level singleton (Workers bindings aren't poolable across requests).
 
-**Authentication**:
-- Middleware (`src/middleware.ts`) protects routes `/feed`, `/ranking`, `/profile`
+**Auth** (`lib/auth/server.ts`): `getAuth()` builds a per-request Better Auth instance (`drizzleAdapter`, `usePlural: true`, `camelCase: true`). Client-side: `lib/auth/client.ts` (`signIn.email`, `signOut`, `useSession`).
+
+**Points/ranking**: no stored `points` column — always computed from `point_events` (`SUM(points_delta)` per user; `active_days` = `COUNT(DISTINCT event_date)` where `source='post'`). See `lib/db/queries/users.ts` (`getRanking`, `getUserById`) and `lib/db/queries/point-events.ts` (`getUserActivity`).
+
+**Authentication middleware**: `src/middleware.ts` runs on **Edge runtime** and only checks *cookie presence* (`getSessionCookie` from `better-auth/cookies`) — never full session validation, to avoid Next.js 16's Proxy architecture pulling in `async_hooks` (unsupported on Cloudflare Workers, see `cloudflare/workers-sdk#13755`). Full session validation (`getAuth().api.getSession(...)`) happens in Server Components/Route Handlers.
+- Protects `/feed`, `/ranking`, `/profile`, `/sabados`
 - Redirects unauthenticated users to `/login`
-- Redirects authenticated users away from `/login`, `/signup`
+- Redirects authenticated users away from `/login`
 
 **Environment Variables**:
 ```
-NEXT_PUBLIC_SUPABASE_URL
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+BETTER_AUTH_SECRET
+BETTER_AUTH_URL
+NEXT_PUBLIC_BETTER_AUTH_URL
+NEXT_PUBLIC_R2_PUBLIC_URL
 ```
 
 ### Database Schema
 
-Tables: `users`, `posts`, `likes`, `comments` (see `supabase-reset.sql`)
-Storage buckets: `posts`, `avatars`
+Tables (Drizzle, `src/lib/db/schema.ts`): `users`, `posts`, `likes`, `comments`, `pointEvents` (domain) + `sessions`, `accounts`, `verifications` (Better Auth). Migrations in `migrations/`, generated via `drizzle-kit`.
+Storage: R2 bucket `PHOTOS_BUCKET`, objects under `posts/` and `avatars/` prefixes.
 
 ### Design System
 
