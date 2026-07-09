@@ -1,37 +1,14 @@
-import { createServerClient } from '@supabase/ssr';
+import { getSessionCookie } from 'better-auth/cookies';
 import { NextResponse, type NextRequest } from 'next/server';
 
-export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
-    request,
-  });
+export const runtime = 'experimental-edge';
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
-          supabaseResponse = NextResponse.next({
-            request,
-          });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
-        },
-      },
-    }
-  );
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+export function middleware(request: NextRequest) {
+  // Lightweight session presence check: only look at cookie existence, no validation.
+  // Better Auth uses 'better-auth.session_token' by default (or __Secure- prefix in secure contexts).
+  // getSessionCookie() returns the token value if present, null otherwise.
+  const sessionToken = getSessionCookie(request.headers);
+  const isAuthenticated = sessionToken !== null;
 
   // Protected routes - redirect to login if not authenticated
   const protectedPaths = ['/feed', '/ranking', '/profile', '/sabados'];
@@ -39,7 +16,7 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith(path)
   );
 
-  if (isProtectedPath && !user) {
+  if (isProtectedPath && !isAuthenticated) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);
@@ -51,13 +28,15 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith(path)
   );
 
-  if (isAuthPath && user) {
+  if (isAuthPath && isAuthenticated) {
     const url = request.nextUrl.clone();
     url.pathname = '/feed';
     return NextResponse.redirect(url);
   }
 
-  return supabaseResponse;
+  return NextResponse.next({
+    request,
+  });
 }
 
 export const config = {
