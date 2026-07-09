@@ -29,14 +29,16 @@ export const posts = sqliteTable('posts', {
 export const likes = sqliteTable('likes', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().references(() => users.id),
-  postId: text('post_id').notNull().references(() => posts.id),
+  // cascade: apagar o post remove seus likes (D1 força FK; sem isso o delete falha).
+  postId: text('post_id').notNull().references(() => posts.id, { onDelete: 'cascade' }),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
 });
 
 export const comments = sqliteTable('comments', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().references(() => users.id),
-  postId: text('post_id').notNull().references(() => posts.id),
+  // cascade: apagar o post remove seus comentários.
+  postId: text('post_id').notNull().references(() => posts.id, { onDelete: 'cascade' }),
   content: text('content').notNull(),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
 });
@@ -47,7 +49,9 @@ export const pointEvents = sqliteTable('point_events', {
   eventDate: text('event_date').notNull(),
   source: text('source', { enum: ['post', 'saturday_attendance', 'compensation'] }).notNull(),
   pointsDelta: integer('points_delta').notNull(),
-  postId: text('post_id').references(() => posts.id),
+  // set null: apagar o post zera o vínculo (o evento de ponto persiste); a lógica
+  // de deletePost relinka o evento órfão ou insere o -1 compensatório.
+  postId: text('post_id').references(() => posts.id, { onDelete: 'set null' }),
   notes: text('notes'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
 });
