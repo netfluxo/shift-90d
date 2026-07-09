@@ -1,6 +1,9 @@
-import { createClient } from '@/lib/supabase/server';
-import { getDateInBrazil, getTodayInBrazil } from '@/lib/utils/timezone';
+import { headers } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
+import { getAuth } from '@/lib/auth/server';
+import { getUserById, getRanking } from '@/lib/db/queries/users';
+import { getUserPosts } from '@/lib/db/queries/posts';
+import { getUserActivity } from '@/lib/db/queries/point-events';
 import { buildDenseRankingMap } from '@/lib/utils/ranking';
 import ProfileClient from '../ProfileClient';
 
@@ -8,131 +11,88 @@ interface Props {
   params: Promise<{ id: string }>;
 }
 
+export const dynamic = 'force-dynamic';
+
 export default async function UserProfilePage({ params }: Props) {
   const { id } = await params;
-  const supabase = await createClient();
 
-  const { data: { user: authUser } } = await supabase.auth.getUser();
+  const auth = getAuth();
+  const session = await auth.api.getSession({ headers: await headers() });
 
-  if (!authUser) {
+  if (!session) {
     redirect('/login');
   }
 
+  const currentUserId = session.user.id;
+
   // If viewing own profile, redirect to /profile
-  if (id === authUser.id) {
+  if (id === currentUserId) {
     redirect('/profile');
   }
 
-  // Fetch user profile (pontos vêm do ledger via user_points_view)
-  const { data: user } = await supabase
-    .from('user_points_view')
-    .select('*')
-    .eq('id', id)
-    .single();
+  // Fetch user profile
+  const userWithPoints = await getUserById(id);
 
-  if (!user) {
+  if (!userWithPoints) {
     notFound();
   }
 
   // Fetch user's posts
-  const { data: posts } = await supabase
-    .from('posts')
-    .select(`
-      *,
-      user:users(id, name, avatar_url),
-      likes:likes(count),
-      comments:comments(count)
-    `)
-    .eq('user_id', id)
-    .order('created_at', { ascending: false });
+  const feedPosts = await getUserPosts(id, currentUserId);
 
-  // Get likes by current user
-  const { data: userLikes } = await supabase
-    .from('likes')
-    .select('post_id')
-    .eq('user_id', authUser.id);
-
-  const likedPostIds = new Set(userLikes?.map((like) => like.post_id) || []);
-
-  // Fetch all users for dense ranking (used for posts and profile badge)
-  const { data: allUsersForRanking } = await supabase
-    .from('user_points_view')
-    .select('id, points')
-    .order('points', { ascending: false });
-
-  const userRankingMap = buildDenseRankingMap(allUsersForRanking || []);
-
-  const transformedPosts = posts?.map((post) => ({
-    ...post,
-    likes_count: post.likes?.[0]?.count || 0,
-    comments_count: post.comments?.[0]?.count || 0,
-    is_liked: likedPostIds.has(post.id),
-    user_ranking: userRankingMap.get(post.user_id) || 0,
-  })) || [];
+  // Convert FeedPost to Post shape for ProfileClient
+  const posts = feedPosts.map((post) => ({
+    id: post.id,
+    user_id: post.userId,
+    media_url: post.mediaUrl,
+    media_type: post.mediaType,
+    caption: post.caption,
+    created_at: post.createdAt.toISOString(),
+    user: {
+      id: post.user.id,
+      name: post.user.name,
+      avatar_url: post.user.avatarUrl,
+      points: 0,
+      created_at: '',
+    },
+    likes_count: post.likesCount,
+    comments_count: post.commentsCount,
+    is_liked: post.isLiked,
+    user_ranking: post.userRanking || 0,
+  }));
 
   // Fetch activity stats for this user
-  const todayInBrazil = getTodayInBrazil();
-
-  // Count today's posts
-  const { count: todayPostsCount } = await supabase
-    .from('posts')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', id)
-    .gte('created_at', `${todayInBrazil}T00:00:00-03:00`)
-    .lt('created_at', `${todayInBrazil}T23:59:59.999-03:00`);
-
-  // Get all posts to calculate active days and streak
-  const { data: userPosts } = await supabase
-    .from('posts')
-    .select('created_at')
-    .eq('user_id', id)
-    .order('created_at', { ascending: false });
-
-  // Calculate unique active days from posts (using Brazil timezone)
-  const uniqueDates = new Set<string>();
-  userPosts?.forEach((post) => {
-    const postDate = getDateInBrazil(new Date(post.created_at));
-    uniqueDates.add(postDate);
-  });
-  const activeDays = uniqueDates.size;
-
-  // Calculate current streak from unique dates
-  let currentStreak = 0;
-  if (uniqueDates.size > 0) {
-    const sortedDates = Array.from(uniqueDates).sort().reverse();
-    const today = new Date(todayInBrazil);
-    const checkDate = new Date(today);
-
-    if (!uniqueDates.has(todayInBrazil)) {
-      checkDate.setDate(checkDate.getDate() - 1);
-    }
-
-    for (const dateStr of sortedDates) {
-      const checkDateStr = checkDate.toISOString().split('T')[0];
-      if (dateStr === checkDateStr) {
-        currentStreak++;
-        checkDate.setDate(checkDate.getDate() - 1);
-      } else if (dateStr < checkDateStr) {
-        break;
-      }
-    }
-  }
+  const activity = await getUserActivity(id);
 
   const activityStats = {
-    total_active_days: activeDays || 0,
-    current_streak: currentStreak,
-    total_points: user?.points || 0,
-    today_posts: todayPostsCount || 0,
-    today_points: Math.min(todayPostsCount || 0, 1),
+    total_active_days: activity.totalActiveDays,
+    current_streak: activity.currentStreak,
+    total_points: activity.totalPoints,
+    today_posts: activity.todayPosts,
+    today_points: activity.todayPoints,
   };
 
-  const rankingPosition = userRankingMap.get(id) || 0;
+  // Get ranking position
+  const ranking = await getRanking(100);
+  const rankingMap = buildDenseRankingMap(
+    ranking.map((u) => ({ id: u.id, points: u.points }))
+  );
+  const rankingPosition = rankingMap.get(id) || 0;
+
+  // Convert UserWithPoints to User shape for ProfileClient
+  const user = {
+    id: userWithPoints.id,
+    name: userWithPoints.name,
+    avatar_url: userWithPoints.avatarUrl,
+    points: userWithPoints.points,
+    created_at: userWithPoints.createdAt.toISOString(),
+  };
 
   return (
     <ProfileClient
       user={user}
-      posts={transformedPosts}
-      currentUserId={authUser.id}
+      posts={posts}
+      currentUserId={currentUserId}
       isOwnProfile={false}
       activityStats={activityStats}
       rankingPosition={rankingPosition}

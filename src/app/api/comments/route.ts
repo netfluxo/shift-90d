@@ -1,17 +1,15 @@
-import { createClient } from '@/lib/supabase/server';
+import { getAuth } from '@/lib/auth/server';
+import { postExists, createComment, getCommentsByPostId } from '@/lib/db/queries/comments';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
-  console.log('[API /comments] Request received');
+  console.log('[API /comments] POST request received');
 
   try {
-    const supabase = await createClient();
-
     // Check authentication
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    console.log('[API /comments] Auth result:', { hasUser: !!user, userId: user?.id, error: authError?.message });
+    const session = await getAuth().api.getSession({ headers: request.headers });
 
-    if (authError || !user) {
+    if (!session) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
@@ -19,7 +17,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse request body
-    const body = await request.json();
+    const body = (await request.json()) as { post_id?: string; content?: string };
     const { post_id, content } = body;
 
     // Validate input
@@ -47,67 +45,64 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify post exists
-    const { data: post, error: postError } = await supabase
-      .from('posts')
-      .select('id')
-      .eq('id', post_id)
-      .maybeSingle();
-
-    if (postError || !post) {
+    const exists = await postExists(post_id);
+    if (!exists) {
       return NextResponse.json(
         { success: false, error: 'Post not found' },
         { status: 404 }
       );
     }
 
-    // Insert comment
-    const { data: comment, error: insertError } = await supabase
-      .from('comments')
-      .insert({
-        user_id: user.id,
-        post_id: post_id,
-        content: trimmedContent,
-      })
-      .select()
-      .single();
-
-    if (insertError) {
-      console.error('Error creating comment:', insertError);
-      return NextResponse.json(
-        { success: false, error: 'Failed to create comment' },
-        { status: 500 }
-      );
-    }
-
-    // Fetch comment with user data
-    const { data: commentWithUser, error: fetchError } = await supabase
-      .from('comments')
-      .select(`
-        *,
-        user:users(
-          id,
-          name,
-          avatar_url
-        )
-      `)
-      .eq('id', comment.id)
-      .single();
-
-    if (fetchError) {
-      console.error('Error fetching comment with user:', fetchError);
-      // Return comment without user data if fetch fails
-      return NextResponse.json({
-        success: true,
-        comment,
-      });
-    }
+    // Create comment
+    const comment = await createComment(session.user.id, post_id, trimmedContent);
 
     return NextResponse.json({
       success: true,
-      comment: commentWithUser,
+      comment,
     });
   } catch (error) {
     console.error('Unexpected error in POST /api/comments:', error);
+    return NextResponse.json(
+      { success: false, error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function GET(request: NextRequest) {
+  console.log('[API /comments] GET request received');
+
+  try {
+    // Check authentication
+    const session = await getAuth().api.getSession({ headers: request.headers });
+
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    // Get post_id from query params
+    const { searchParams } = new URL(request.url);
+    const post_id = searchParams.get('post_id');
+
+    if (!post_id) {
+      return NextResponse.json(
+        { success: false, error: 'Missing required query parameter: post_id' },
+        { status: 400 }
+      );
+    }
+
+    // Fetch comments
+    const comments = await getCommentsByPostId(post_id);
+
+    return NextResponse.json({
+      success: true,
+      comments,
+    });
+  } catch (error) {
+    console.error('Unexpected error in GET /api/comments:', error);
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }

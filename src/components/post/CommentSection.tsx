@@ -1,9 +1,7 @@
 'use client';
 
-import { createClient } from '@/lib/supabase/client';
 import { Comment } from '@/lib/types';
 import Image from 'next/image';
-import { getAvatarUrl } from '@/lib/utils/avatar';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
@@ -25,19 +23,15 @@ export default function CommentSection({ postId, currentUserId, onClose }: Comme
   }, [postId]);
 
   const fetchComments = async () => {
-    const supabase = createClient();
+    try {
+      const res = await fetch(`/api/comments?post_id=${postId}`);
+      const data = (await res.json()) as { success: boolean; comments?: Comment[] };
 
-    const { data, error } = await supabase
-      .from('comments')
-      .select(`
-        *,
-        user:users(id, name, avatar_url)
-      `)
-      .eq('post_id', postId)
-      .order('created_at', { ascending: true });
-
-    if (!error && data) {
-      setComments(data as Comment[]);
+      if (data.success && data.comments) {
+        setComments(data.comments);
+      }
+    } catch (err) {
+      console.error('Error fetching comments:', err);
     }
     setLoading(false);
   };
@@ -67,9 +61,9 @@ export default function CommentSection({ postId, currentUserId, onClose }: Comme
         }),
       });
 
-      const data = await response.json();
+      const data = (await response.json()) as { success: boolean; error?: string; comment?: Comment };
 
-      if (!response.ok || !data.success) {
+      if (!response.ok || !data.success || !data.comment) {
         throw new Error(data.error || 'Failed to create comment');
       }
 
@@ -113,7 +107,7 @@ export default function CommentSection({ postId, currentUserId, onClose }: Comme
                 <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden shrink-0">
                   {comment.user?.avatar_url ? (
                     <Image
-                      src={getAvatarUrl(comment.user.avatar_url, 32)!}
+                      src={comment.user.avatar_url}
                       alt={comment.user.name}
                       width={32}
                       height={32}

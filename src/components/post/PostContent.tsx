@@ -34,7 +34,7 @@ export default function PostContent({ post, currentUserId, compact = false }: Po
         body: JSON.stringify({ post_id: post.id }),
       });
 
-      const data = await response.json();
+      const data = (await response.json()) as { success: boolean; error?: string; action: string; likes_count: number };
 
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'Failed to toggle like');

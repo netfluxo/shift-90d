@@ -3,7 +3,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { Post } from '@/lib/types';
-import { getAvatarUrl } from '@/lib/utils/avatar';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import PostContent from './PostContent';
@@ -50,7 +49,7 @@ export default function PostCard({ post, currentUserId }: PostCardProps) {
     setIsDeleting(true);
     try {
       const response = await fetch(`/api/posts/${post.id}`, { method: 'DELETE' });
-      const data = await response.json();
+      const data = (await response.json()) as { success: boolean; error?: string };
 
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'Erro ao apagar publicação');
@@ -72,7 +71,7 @@ export default function PostCard({ post, currentUserId }: PostCardProps) {
           <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden">
             {post.user?.avatar_url ? (
               <Image
-                src={getAvatarUrl(post.user.avatar_url, 40)!}
+                src={post.user.avatar_url}
                 alt={post.user.name}
                 width={40}
                 height={40}

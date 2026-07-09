@@ -2,8 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { useSession } from '@/lib/auth/client';
 
 const navItems = [
   { href: '/feed', label: 'Feed', icon: HomeIcon, adminOnly: false },
@@ -14,14 +13,8 @@ const navItems = [
 
 export default function BottomNav() {
   const pathname = usePathname();
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setIsAdmin(session?.user?.email === 'admin@admin.com');
-    });
-  }, []);
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.email === 'admin@admin.com';
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50">

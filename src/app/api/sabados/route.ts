@@ -1,61 +1,44 @@
-import { createClient } from '@/lib/supabase/server';
-import { createClient as createAdmin } from '@supabase/supabase-js';
+import { getAuth } from '@/lib/auth/server';
+import { createPointEvent, deletePointEvent } from '@/lib/db/queries/point-events';
 import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const session = await getAuth().api.getSession({ headers: request.headers });
 
-  if (!user || user.email !== 'admin@admin.com') {
+  if (!session?.user || session.user.email !== 'admin@admin.com') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
-  const { user_id, event_date } = await request.json();
+  const { user_id, event_date } = (await request.json()) as {
+    user_id?: string;
+    event_date?: string;
+  };
 
   if (!user_id || !event_date) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
   }
 
-  const admin = createAdmin(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
-
-  const { error } = await admin.from('point_events').insert({
-    user_id,
-    event_date,
-    source: 'saturday_attendance',
-    points_delta: 1,
-  });
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  await createPointEvent(user_id, event_date, 'saturday_attendance', 1);
 
   return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(request: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const session = await getAuth().api.getSession({ headers: request.headers });
 
-  if (!user || user.email !== 'admin@admin.com') {
+  if (!session?.user || session.user.email !== 'admin@admin.com') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
   }
 
-  const { id } = await request.json();
+  const { id } = (await request.json()) as { id?: string };
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
 
-  const admin = createAdmin(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
-
-  const { error } = await admin
-    .from('point_events')
-    .delete()
-    .eq('id', id)
-    .eq('source', 'saturday_attendance');
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  try {
+    await deletePointEvent(id);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to delete point event';
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
 
   return NextResponse.json({ ok: true });
 }
