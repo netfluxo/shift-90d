@@ -1,0 +1,44 @@
+name: CI
+
+# Validação de PR: roda lint + build (com type-check) ANTES do merge, para que
+# erros de tipo/lint apareçam na PR e não só no deploy da main. Não deploya.
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Generate Cloudflare binding types
+        # cloudflare-env.d.ts é gerado (gitignored); sem ele o type-check não
+        # conhece PHOTOS_BUCKET/DB. Secrets ficam disponíveis em PRs do mesmo repo.
+        run: npm run cf:typegen
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build (Next + OpenNext type-check)
+        run: npm run cf:build
+        env:
+          NEXT_PUBLIC_R2_PUBLIC_URL: https://pub-1aed824bdf3a40d3a22f6042d9a75d2b.r2.dev
