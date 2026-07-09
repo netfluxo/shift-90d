@@ -1,58 +1,42 @@
-import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
+import { headers } from 'next/headers';
+import { getAuth } from '@/lib/auth/server';
+import { getFeed } from '@/lib/db/queries/posts';
+import { Post } from '@/lib/types';
 import FeedClient from './FeedClient';
 
+export const dynamic = 'force-dynamic';
+
 export default async function FeedPage() {
-  const supabase = await createClient();
+  const session = await getAuth().api.getSession({ headers: await headers() });
 
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
+  if (!session?.user) {
     redirect('/login');
   }
 
-  // Fetch posts with user info and counts
-  const { data: posts } = await supabase
-    .from('posts')
-    .select(`
-      *,
-      user:users(id, name, avatar_url, points),
-      likes:likes(count),
-      comments:comments(count)
-    `)
-    .order('created_at', { ascending: false })
-    .limit(10);
+  // Fetch first page of feed
+  const { posts: feedPosts, hasMore } = await getFeed(session.user.id, 0, 10);
 
-  // Get likes by current user to know which posts are liked
-  const { data: userLikes } = await supabase
-    .from('likes')
-    .select('post_id')
-    .eq('user_id', user.id);
+  // Transform FeedPost (camelCase) to Post (snake_case)
+  const transformedPosts: Post[] = feedPosts.map((post) => ({
+    id: post.id,
+    user_id: post.userId,
+    media_url: post.mediaUrl,
+    media_type: post.mediaType,
+    caption: post.caption,
+    created_at: post.createdAt.toISOString(),
+    user: {
+      id: post.user.id,
+      name: post.user.name,
+      avatar_url: post.user.avatarUrl,
+      points: 0, // Not needed on feed, but required by Post type
+      created_at: '',
+    },
+    likes_count: post.likesCount,
+    comments_count: post.commentsCount,
+    is_liked: post.isLiked,
+    user_ranking: post.userRanking || 0,
+  }));
 
-  const likedPostIds = new Set(userLikes?.map((like) => like.post_id) || []);
-
-  // Fetch user rankings
-  const { data: allUsersRanking } = await supabase
-    .from('user_points_view')
-    .select('id')
-    .order('points', { ascending: false });
-
-  // Create a map of user id to ranking position
-  const userRankingMap = new Map<string, number>();
-  allUsersRanking?.forEach((u, index) => {
-    userRankingMap.set(u.id, index + 1);
-  });
-
-  // Transform posts data
-  const transformedPosts = posts?.map((post) => ({
-    ...post,
-    likes_count: post.likes?.[0]?.count || 0,
-    comments_count: post.comments?.[0]?.count || 0,
-    is_liked: likedPostIds.has(post.id),
-    user_ranking: userRankingMap.get(post.user_id) || 0,
-  })) || [];
-
-  const hasMore = (posts?.length || 0) === 10;
-
-  return <FeedClient posts={transformedPosts} currentUserId={user.id} hasMore={hasMore} />;
+  return <FeedClient posts={transformedPosts} currentUserId={session.user.id} hasMore={hasMore} />;
 }

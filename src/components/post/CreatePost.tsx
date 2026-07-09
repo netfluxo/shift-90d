@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
-import { createClient } from '@/lib/supabase/client';
+import { resizeImageFile } from '@/lib/utils/image-resize';
 
 interface CreatePostProps {
   userId: string;
@@ -33,7 +33,7 @@ export default function CreatePost({ userId, onPostCreated }: CreatePostProps) {
     try {
       const response = await fetch(`/api/users/${userId}/activity`);
       if (response.ok) {
-        const data = await response.json();
+        const data = (await response.json()) as { today_posts?: number };
         setDailyPostsCount(data.today_posts || 0);
       }
     } catch (err) {
@@ -78,38 +78,51 @@ export default function CreatePost({ userId, onPostCreated }: CreatePostProps) {
     setError('');
     setSuccessMessage('');
 
-    const supabase = createClient();
-
     try {
-      // Upload file to Supabase Storage
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${userId}/${Date.now()}.${fileExt}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('posts')
-        .upload(fileName, file);
-
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('posts')
-        .getPublicUrl(fileName);
-
-      // Create post via API
+      // Determine media type
       const mediaType = file.type.startsWith('video/') ? 'video' : 'image';
 
+      // Resize image if needed
+      let fileToUpload = file;
+      if (mediaType === 'image') {
+        const optimized = await resizeImageFile(file, 1080, 0.85);
+        fileToUpload = new File([optimized], file.name, { type: file.type });
+      }
+
+      // Upload file via /api/upload
+      const formData = new FormData();
+      formData.append('file', fileToUpload);
+      formData.append('type', 'post');
+
+      const uploadRes = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const uploadData = (await uploadRes.json()) as { url: string; error?: string };
+
+      if (!uploadRes.ok) {
+        throw new Error(uploadData.error || 'Upload failed');
+      }
+
+      // Create post via API
       const response = await fetch('/api/posts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          media_url: publicUrl,
+          media_url: uploadData.url,
           media_type: mediaType,
           caption: caption.trim(),
         }),
       });
 
-      const data = await response.json();
+      const data = (await response.json()) as {
+        success: boolean;
+        error?: string;
+        points_awarded?: boolean;
+        daily_limit_reached?: boolean;
+        daily_posts_count: number;
+      };
 
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'Failed to create post');

@@ -1,0 +1,42 @@
+name: Deploy to Cloudflare Workers
+
+# Trunk-based: deploya ao dar merge/push na main. Também roda sob demanda.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  # Evita deploys concorrentes pisando um no outro.
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build + Deploy (OpenNext → Workers)
+        run: npm run cf:deploy
+        env:
+          # Auth do wrangler (adicionar como GitHub Secrets — ver README/DEPLOY.md).
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Valor público, inlinado pelo Next no build (não é secret).
+          # Mantido em sync com o `vars` do wrangler.jsonc.
+          NEXT_PUBLIC_R2_PUBLIC_URL: https://pub-1aed824bdf3a40d3a22f6042d9a75d2b.r2.dev

@@ -15,11 +15,11 @@ const serwist = new Serwist({
   skipWaiting: true,
   clientsClaim: true,
   runtimeCaching: [
-    // Post media — immutable (filename has timestamp), serve from cache
+    // Post media — immutable (R2 key includes a random UUID), serve from cache
     {
-      matcher: /\/storage\/v1\/object\/public\/posts\//,
+      matcher: /\/posts\//,
       handler: new CacheFirst({
-        cacheName: "supabase-post-media",
+        cacheName: "r2-post-media",
         plugins: [
           new ExpirationPlugin({
             maxEntries: 200,
@@ -31,9 +31,9 @@ const serwist = new Serwist({
     },
     // Avatars — serve stale, revalidate in background
     {
-      matcher: /\/storage\/v1\/object\/public\/avatars\//,
+      matcher: /\/avatars\//,
       handler: new StaleWhileRevalidate({
-        cacheName: "supabase-avatars",
+        cacheName: "r2-avatars",
         plugins: [
           new ExpirationPlugin({
             maxEntries: 100,

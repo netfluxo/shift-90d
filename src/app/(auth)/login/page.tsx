@@ -1,6 +1,6 @@
 'use client';
 
-import { createClient } from '@/lib/supabase/client';
+import { signIn } from '@/lib/auth/client';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -18,23 +18,14 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
 
-    const supabase = createClient();
-
-    const { error } = await supabase.auth.signInWithPassword({
+    const { error: signInError } = await signIn.email({
       email,
       password,
     });
 
-    if (error) {
-      console.error('Login error:', error);
-      // Mostrar mensagem real do erro para debug
-      if (error.message.includes('Invalid login credentials')) {
-        setError('Email ou senha incorretos');
-      } else if (error.message.includes('Email not confirmed')) {
-        setError('Por favor, confirme seu email antes de fazer login');
-      } else {
-        setError(error.message);
-      }
+    if (signInError) {
+      console.error('Login error:', signInError);
+      setError('Email ou senha incorretos');
       setLoading(false);
       return;
     }

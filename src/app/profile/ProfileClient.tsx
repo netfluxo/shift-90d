@@ -3,12 +3,12 @@
 import BottomNav from '@/components/layout/BottomNav';
 import Header from '@/components/layout/Header';
 import PostModal from '@/components/post/PostModal';
-import { createClient } from '@/lib/supabase/client';
 import { Post, User } from '@/lib/types';
 import Image from 'next/image';
-import { getAvatarUrl } from '@/lib/utils/avatar';
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
+import { signOut } from '@/lib/auth/client';
+import { resizeImageFile } from '@/lib/utils/image-resize';
 
 interface ActivityStats {
   total_active_days: number;
@@ -44,8 +44,7 @@ export default function ProfileClient({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleLogout = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    await signOut();
     window.location.href = '/login';
   };
 
@@ -54,32 +53,47 @@ export default function ProfileClient({
     if (!file) return;
 
     setLoading(true);
-    const supabase = createClient();
 
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${user.id}/avatar.${fileExt}`;
+    try {
+      // Resize if image, otherwise use original file
+      let uploadFile = file;
+      if (file.type.startsWith('image/')) {
+        const blob = await resizeImageFile(file, 400, 0.85);
+        uploadFile = new File([blob], file.name, { type: file.type });
+      }
 
-    const { error: uploadError } = await supabase.storage
-      .from('avatars')
-      .upload(fileName, file, { upsert: true });
+      // Upload via /api/upload
+      const formData = new FormData();
+      formData.append('file', uploadFile);
+      formData.append('type', 'avatar');
 
-    if (uploadError) {
-      console.error('Upload error:', uploadError);
-      setLoading(false);
-      return;
-    }
+      const uploadRes = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
 
-    const { data: { publicUrl } } = supabase.storage
-      .from('avatars')
-      .getPublicUrl(fileName);
+      if (!uploadRes.ok) {
+        console.error('Upload failed:', uploadRes.statusText);
+        setLoading(false);
+        return;
+      }
 
-    const { error: updateError } = await supabase
-      .from('users')
-      .update({ avatar_url: publicUrl })
-      .eq('id', user.id);
+      const { url } = (await uploadRes.json()) as { url: string };
 
-    if (!updateError) {
-      router.refresh();
+      // Update profile via /api/profile
+      const updateRes = await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ avatarUrl: url }),
+      });
+
+      if (updateRes.ok) {
+        router.refresh();
+      } else {
+        console.error('Profile update failed:', updateRes.statusText);
+      }
+    } catch (error) {
+      console.error('Avatar change error:', error);
     }
 
     setLoading(false);
@@ -92,15 +106,21 @@ export default function ProfileClient({
     }
 
     setLoading(true);
-    const supabase = createClient();
 
-    const { error } = await supabase
-      .from('users')
-      .update({ name: name.trim() })
-      .eq('id', user.id);
+    try {
+      const updateRes = await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim() }),
+      });
 
-    if (!error) {
-      router.refresh();
+      if (updateRes.ok) {
+        router.refresh();
+      } else {
+        console.error('Profile update failed:', updateRes.statusText);
+      }
+    } catch (error) {
+      console.error('Name update error:', error);
     }
 
     setShowNameModal(false);
@@ -150,7 +170,7 @@ export default function ProfileClient({
                   <div className="w-full h-full rounded-full overflow-hidden bg-gray-200">
                     {user.avatar_url ? (
                       <Image
-                        src={getAvatarUrl(user.avatar_url, 96)!}
+                        src={user.avatar_url!}
                         alt={user.name}
                         width={96}
                         height={96}

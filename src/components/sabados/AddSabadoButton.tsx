@@ -49,7 +49,7 @@ export default function AddSabadoButton({ users }: { users: User[] }) {
       body: JSON.stringify({ user_id: userId, event_date: eventDate }),
     });
     setLoading(false);
-    if (!res.ok) { const d = await res.json(); setError(d.error ?? 'Erro ao salvar.'); return; }
+    if (!res.ok) { const d = (await res.json()) as { error?: string }; setError(d.error ?? 'Erro ao salvar.'); return; }
     setOpen(false);
     router.refresh();
   }

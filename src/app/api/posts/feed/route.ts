@@ -1,13 +1,13 @@
-import { createClient } from '@/lib/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
+import { getAuth } from '@/lib/auth/server';
+import { getFeed } from '@/lib/db/queries/posts';
+import { Post } from '@/lib/types';
 
 const PAGE_SIZE = 10;
 
 export async function GET(request: NextRequest) {
-  const supabase = await createClient();
-
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
+  const session = await getAuth().api.getSession({ headers: request.headers });
+  if (!session?.user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -15,60 +15,33 @@ export async function GET(request: NextRequest) {
   const page = parseInt(searchParams.get('page') || '0', 10);
   const limit = Math.min(parseInt(searchParams.get('limit') || String(PAGE_SIZE), 10), 50);
 
-  const from = page * limit;
-  const to = from + limit - 1;
+  // Fetch posts using getFeed
+  const { posts: feedPosts, hasMore } = await getFeed(session.user.id, page, limit);
 
-  // Fetch posts with user info and counts
-  const { data: posts, error } = await supabase
-    .from('posts')
-    .select(`
-      *,
-      user:users(id, name, avatar_url, points),
-      likes:likes(count),
-      comments:comments(count)
-    `)
-    .order('created_at', { ascending: false })
-    .range(from, to);
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  // Get likes by current user
-  const postIds = posts?.map((p) => p.id) || [];
-  const { data: userLikes } = postIds.length > 0
-    ? await supabase
-        .from('likes')
-        .select('post_id')
-        .eq('user_id', user.id)
-        .in('post_id', postIds)
-    : { data: [] };
-
-  const likedPostIds = new Set(userLikes?.map((like) => like.post_id) || []);
-
-  // Fetch user rankings
-  const { data: allUsersRanking } = await supabase
-    .from('user_points_view')
-    .select('id')
-    .order('points', { ascending: false });
-
-  const userRankingMap = new Map<string, number>();
-  allUsersRanking?.forEach((u, index) => {
-    userRankingMap.set(u.id, index + 1);
-  });
-
-  // Transform posts
-  const transformedPosts = posts?.map((post) => ({
-    ...post,
-    likes_count: post.likes?.[0]?.count || 0,
-    comments_count: post.comments?.[0]?.count || 0,
-    is_liked: likedPostIds.has(post.id),
-    user_ranking: userRankingMap.get(post.user_id) || 0,
-  })) || [];
+  // Transform FeedPost (camelCase) to Post (snake_case)
+  const transformedPosts: Post[] = feedPosts.map((post) => ({
+    id: post.id,
+    user_id: post.userId,
+    media_url: post.mediaUrl,
+    media_type: post.mediaType,
+    caption: post.caption,
+    created_at: post.createdAt.toISOString(),
+    user: {
+      id: post.user.id,
+      name: post.user.name,
+      avatar_url: post.user.avatarUrl,
+      points: 0, // Not needed on feed, but required by Post type
+      created_at: '',
+    },
+    likes_count: post.likesCount,
+    comments_count: post.commentsCount,
+    is_liked: post.isLiked,
+    user_ranking: post.userRanking || 0,
+  }));
 
   return NextResponse.json({
     posts: transformedPosts,
-    hasMore: (posts?.length || 0) === limit,
+    hasMore,
   }, {
     headers: {
       'Cache-Control': 'private, max-age=60, stale-while-revalidate=300',

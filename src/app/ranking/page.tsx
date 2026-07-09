@@ -1,30 +1,35 @@
-import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
+import { headers } from 'next/headers';
 import RankingItem from '@/components/ranking/RankingItem';
 import BottomNav from '@/components/layout/BottomNav';
 import Header from '@/components/layout/Header';
 import { User } from '@/lib/types';
 import { buildDenseRankingMap } from '@/lib/utils/ranking';
+import { getAuth } from '@/lib/auth/server';
+import { getRanking } from '@/lib/db/queries/users';
+
+export const dynamic = 'force-dynamic';
 
 export default async function RankingPage() {
-  const supabase = await createClient();
+  const session = await getAuth().api.getSession({ headers: await headers() });
 
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
+  if (!session?.user) {
     redirect('/login');
   }
 
-  const { data: usersData } = await supabase
-    .from('user_points_view')
-    .select('id, name, avatar_url, created_at, points, active_days')
-    .gt('points', 0)
-    .order('points', { ascending: false })
-    .limit(100);
+  const usersData = await getRanking(100);
 
-  const users = usersData || [];
+  // Map UserWithPoints (camelCase) to User (snake_case) with active_days
+  const users = usersData.map((u) => ({
+    id: u.id,
+    name: u.name,
+    avatar_url: u.avatarUrl,
+    created_at: u.createdAt.toISOString(),
+    points: u.points,
+    active_days: u.activeDays,
+  })) as (User & { active_days?: number })[];
 
-  const rankingMap = buildDenseRankingMap(users);
+  const rankingMap = buildDenseRankingMap(usersData);
 
   return (
     <div className="pb-20">

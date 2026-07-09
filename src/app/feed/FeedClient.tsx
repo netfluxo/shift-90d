@@ -33,7 +33,7 @@ export default function FeedClient({ posts: initialPosts, currentUserId, hasMore
     try {
       const res = await fetch(`/api/posts/feed?page=${page}&limit=10`);
       if (!res.ok) throw new Error('Failed to fetch');
-      const data = await res.json();
+      const data = (await res.json()) as { posts: Post[]; hasMore: boolean };
 
       setPosts((prev) => {
         const existingIds = new Set(prev.map((p) => p.id));

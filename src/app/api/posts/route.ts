@@ -1,21 +1,24 @@
-import { createClient } from '@/lib/supabase/server';
-import { getTodayInBrazil } from '@/lib/utils/timezone';
+import { getAuth } from '@/lib/auth/server';
+import { createPost } from '@/lib/db/queries/posts';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
+    const auth = await getAuth();
+    const session = await auth.api.getSession({ headers: request.headers });
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    if (!session?.user) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    const body = await request.json();
+    const body = (await request.json()) as {
+      media_url?: string;
+      media_type?: string;
+      caption?: string;
+    };
     const { media_url, media_type, caption } = body;
 
     if (!media_url || !media_type) {
@@ -32,67 +35,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const todayInBrazil = getTodayInBrazil();
-
-    const { count: todayPostsCount, error: countError } = await supabase
-      .from('posts')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .gte('created_at', `${todayInBrazil}T00:00:00-03:00`)
-      .lt('created_at', `${todayInBrazil}T23:59:59-03:00`);
-
-    if (countError) {
-      console.error('Error counting posts:', countError);
-      return NextResponse.json(
-        { success: false, error: 'Failed to check daily post count' },
-        { status: 500 }
-      );
-    }
-
-    const dailyPostsCount = todayPostsCount || 0;
-    const shouldAwardPoints = dailyPostsCount < 1;
-
-    const { data: post, error: postError } = await supabase
-      .from('posts')
-      .insert({
-        user_id: user.id,
-        media_url,
-        media_type,
-        caption: caption || null,
-      })
-      .select()
-      .single();
-
-    if (postError) {
-      console.error('Error creating post:', postError);
-      return NextResponse.json(
-        { success: false, error: 'Failed to create post' },
-        { status: 500 }
-      );
-    }
-
-    if (shouldAwardPoints) {
-      const { error: eventError } = await supabase
-        .from('point_events')
-        .insert({
-          user_id: user.id,
-          event_date: todayInBrazil,
-          source: 'post',
-          points_delta: 1,
-          post_id: post.id,
-        });
-
-      if (eventError) {
-        console.error('Error inserting point_event:', eventError);
-      }
-    }
+    const { post, pointsAwarded, dailyPostsCount } = await createPost(
+      session.user.id,
+      media_url,
+      media_type as 'image' | 'video',
+      caption || null
+    );
 
     return NextResponse.json({
       success: true,
       post,
-      points_awarded: shouldAwardPoints,
-      daily_posts_count: dailyPostsCount + 1,
-      daily_limit_reached: dailyPostsCount + 1 >= 1,
+      points_awarded: pointsAwarded,
+      daily_posts_count: dailyPostsCount,
+      daily_limit_reached: dailyPostsCount >= 1,
     });
   } catch (error) {
     console.error('Unexpected error in POST /api/posts:', error);

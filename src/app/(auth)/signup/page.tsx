@@ -1,6 +1,6 @@
 'use client';
 
-import { createClient } from '@/lib/supabase/client';
+import { signUp } from '@/lib/auth/client';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -17,46 +17,32 @@ export default function SignupPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setLoading(true);
 
     if (password.length < 6) {
       setError('A senha deve ter pelo menos 6 caracteres');
-      setLoading(false);
       return;
     }
 
-    const supabase = createClient();
+    setLoading(true);
 
-    const { data, error: signUpError } = await supabase.auth.signUp({
+    const { error: signUpError } = await signUp.email({
+      name: name.trim(),
       email,
       password,
-      options: {
-        data: {
-          name,
-        },
-      },
     });
 
     if (signUpError) {
-      setError(signUpError.message);
+      console.error('Signup error:', signUpError);
+      if (signUpError.status === 422 || signUpError.code === 'USER_ALREADY_EXISTS') {
+        setError('Este email já está cadastrado');
+      } else {
+        setError(signUpError.message || 'Erro ao criar conta');
+      }
       setLoading(false);
       return;
     }
 
-    if (data.user) {
-      // Create user profile
-      const { error: profileError } = await supabase.from('users').insert({
-        id: data.user.id,
-        name,
-        avatar_url: null,
-        points: 0,
-      });
-
-      if (profileError) {
-        console.error('Error creating profile:', profileError);
-      }
-    }
-
+    // Better Auth cria a sessão automaticamente após o signup.
     router.push('/feed');
     router.refresh();
   };
