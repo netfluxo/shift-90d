@@ -170,7 +170,8 @@ export default function CreatePost({ userId, onPostCreated }: CreatePostProps) {
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-20 right-4 w-14 h-14 bg-secondary text-white rounded-full shadow-lg flex items-center justify-center hover:bg-secondary-dark transition z-40"
+        aria-label="Criar post"
+        className="fixed bottom-20 right-4 w-16 h-16 bg-[var(--secondary-color)] text-white rounded-full shadow-xl ring-4 ring-white/80 flex items-center justify-center hover:bg-secondary-dark transition z-40"
       >
         <PlusIcon className="w-8 h-8" />
       </button>
