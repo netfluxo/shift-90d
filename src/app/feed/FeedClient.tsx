@@ -2,8 +2,10 @@
 
 import BottomNav from '@/components/layout/BottomNav';
 import Header from '@/components/layout/Header';
+import CreatePost from '@/components/post/CreatePost';
 import PostCard from '@/components/post/PostCard';
 import { Post } from '@/lib/types';
+import { useRouter } from 'next/navigation';
 import { useState, useEffect, useRef, useCallback } from 'react';
 
 interface FeedClientProps {
@@ -13,6 +15,7 @@ interface FeedClientProps {
 }
 
 export default function FeedClient({ posts: initialPosts, currentUserId, hasMore: initialHasMore }: FeedClientProps) {
+  const router = useRouter();
   const [posts, setPosts] = useState<Post[]>(initialPosts);
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [loading, setLoading] = useState(false);
@@ -67,6 +70,10 @@ export default function FeedClient({ posts: initialPosts, currentUserId, hasMore
     return () => observer.disconnect();
   }, [loadMore]);
 
+  const handlePostCreated = () => {
+    router.refresh();
+  };
+
   return (
     <div className="pb-5">
       {/* Header */}
@@ -98,6 +105,9 @@ export default function FeedClient({ posts: initialPosts, currentUserId, hasMore
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
         </div>
       )}
+
+      {/* Create Post Button */}
+      <CreatePost userId={currentUserId} onPostCreated={handlePostCreated} />
 
       {/* Bottom Navigation */}
       <BottomNav />
