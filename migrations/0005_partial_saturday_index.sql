@@ -1,0 +1,1 @@
+CREATE INDEX `idx_pe_saturday` ON `point_events` (`event_date`) WHERE "point_events"."source" = 'saturday_attendance';

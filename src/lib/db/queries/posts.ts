@@ -214,7 +214,9 @@ export async function getUserPosts(
       .from(posts)
       .innerJoin(users, eq(users.id, posts.userId))
       .where(eq(posts.userId, userId))
-      .orderBy(desc(posts.createdAt), desc(posts.id)),
+      // Sem tiebreaker por id: não há paginação aqui, e incluí-lo forçava
+      // "USE TEMP B-TREE FOR LAST TERM OF ORDER BY" sobre idx_posts_user_created.
+      .orderBy(desc(posts.createdAt)),
   ]);
 
   const rankingMap = buildDenseRankingMap(ranking);

@@ -234,17 +234,51 @@ removido do `wrangler.jsonc`.
 
 ## Projeção
 
-Rows read por page view — "antes" medido no D1, "depois" medido no dump real:
+## Resultado medido em produção
+
+`rows_read` real do D1, antes e depois, com todas as migrations aplicadas:
+
+| Query | Antes | Depois |
+|---|---|---|
+| feed (10 posts + counts + is_liked) | 2.372 | **22** |
+| ranking (`point_events` GROUP BY → `user_points`) | 937 | **81** |
+| `getUserPosts` (perfil) | 613 | **22** |
+| `getUserById` | 390 | **2** |
+| activity: pontos + active_days | 778 | **1** |
+| activity: streak | 393 | **12** |
+| activity: posts de hoje | 2 | **2** |
+| `createPost`: contagem do dia | 392 | **2** |
+| `/sabados` | 390 | **0** |
+| sessão Better Auth | 2 | **2** |
+
+Por page view:
 
 | Página | Antes | Depois | Fator |
 |---|---|---|---|
-| `/feed` (SSR page 0) | 3.330 | ~95 | 35× |
-| `/feed` (cada página do scroll) | 3.330 | ~95 | 35× |
-| `/profile` | 3.890 | ~150 | 26× |
-| `/ranking` | 939 | 62 | 15× |
+| `/feed` (SSR page 0) | 3.330 | **105** | 32× |
+| `/feed` (cada página do scroll) | 3.330 | **105** | 32× |
+| `/profile` | 3.890 | **122** | 32× |
+| `/ranking` | 939 | **83** | 11× |
 
-No mesmo mix de tráfego: **7.54M → ~230k rows read/dia** (4,6% do limite free). Margem para
-~50k page views/dia — ~800 por usuário na base atual de 60.
+No mesmo mix de tráfego (7.54M ÷ ~3.300 ≈ 2.300 page views/dia): **7.54M → ~250k rows
+read/dia**, 5% do limite free. Margem para ~45k page views/dia.
+
+`getRanking` (81) passou a ser o maior item de cada página. Fica como próximo alvo se o
+volume crescer — não vale otimizar agora.
+
+### Duas descobertas durante a execução
+
+**`ANALYZE` não é opcional.** O `ANALYZE` da migration 0002 rodou antes de 0003 criar
+`user_points`, então o planner ficou sem estatísticas para ela e entrava pelo `users` como
+tabela externa no ranking: 160 rows_read. Com estatísticas ele entra por
+`idx_user_points_points` e não ordena: 81. Daí a migration 0004.
+
+**No D1, `rows_read` manda; `EXPLAIN QUERY PLAN` engana.** No caso do `/sabados`, o EXPLAIN
+reportava `SEARCH point_events USING INDEX idx_pe_source_date` tanto com quanto sem o índice
+parcial `idx_pe_saturday`, mas o `rows_read` medido era 0 com ele e 390 sem. `sqlite_stat1`
+explica: `idx_pe_source_date` tem stat `390 390 30` — todas as rows compartilham o mesmo
+`source`, então um lookup por `source` custa o mesmo que o full scan. Cheguei a remover o
+índice parcial confiando no EXPLAIN e tive que restaurá-lo. Decidir por medição, não por plano.
 
 ## Riscos e novos gaps
 

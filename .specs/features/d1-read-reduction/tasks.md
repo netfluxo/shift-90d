@@ -1,7 +1,35 @@
 # Tasks — Redução de rows read no D1
 
 **Spec**: [spec.md](./spec.md) · **Design**: [design.md](./design.md)
-**Status**: aguardando aprovação para Execute
+**Status**: Execute concluído — migrations 0002–0005 aplicadas em produção, código na branch
+`feat/d1-read-reduction`. Falta apenas D2v (medir o dashboard por 24h).
+
+| Task | Status |
+|---|---|
+| A1 migration de índices | ✅ `migrations/0002_indexes.sql` |
+| A2 índices no schema Drizzle | ✅ `drizzle-kit generate` sem diff |
+| A3 script de planos | ✅ `scripts/explain-hot-queries.sql` |
+| A4 aplicar em produção | ✅ 11 índices, verificado |
+| A5 `toggleLike` idempotente | ✅ `onConflictDoNothing` |
+| B1 tabela + triggers | ✅ 4 triggers em produção |
+| B2 script de paridade | ✅ `scripts/verify-points-parity.sql`, 0 divergências |
+| B3 rebuild | ✅ `npm run db:rebuild-points:remote` |
+| B4 `user_points` no schema | ✅ + `SPEC_DEVIATION` atualizado |
+| B5 documentar triggers | ✅ `CLAUDE.md` |
+| B6 aplicar em produção | ✅ paridade 0 |
+| C1 `getRanking`/`getUserById` | ✅ 937→81, 390→2 |
+| C2 `getFeed` keyset | ✅ 2.372→22 |
+| C3 `getUserPosts` | ✅ 613→22 |
+| C4 rota com cursor + fallback | ✅ |
+| C5 `FeedClient` com cursor | ✅ |
+| C6 `getUserActivity` | ✅ 4 queries→3, 1.171→15 |
+| C7 `createPost` | ✅ 392→2 |
+| C8 perfis paralelizados | ✅ ranking 1× por request |
+| C9 binding morto removido | ✅ `NEXT_TAG_CACHE_D1` |
+| — migration 0004 (`ANALYZE`) | ✅ não prevista; ver design.md |
+| — migration 0005 (índice parcial `/sabados`) | ✅ não prevista; 390→0 |
+| D1v paridade funcional | ✅ ranking, counts, is_liked e keyset conferidos sobre dados reais |
+| D2v medição 24h no dashboard | ⏳ pendente |
 
 Gate global (antes de qualquer push): `npm run lint` + `npx tsc --noEmit` + `npm run build`.
 

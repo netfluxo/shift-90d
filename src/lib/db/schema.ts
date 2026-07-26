@@ -1,11 +1,16 @@
 import { sqliteTable, text, integer, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
 
-// SPEC_DEVIATION: sem coluna `points` armazenada.
+// SPEC_DEVIATION: sem coluna `points` em `users`.
 // Reason: a migration original do Supabase (add-user-points-view.sql) usa
 // point_events como fonte de verdade — points = SUM(points_delta), active_days =
 // COUNT(DISTINCT event_date WHERE source='post'). Um campo `points` aqui ficaria
-// dessincronizado. Ranking/perfil computam via agregação em point_events (ver
-// src/lib/db/queries/users.ts).
+// dessincronizado, porque nada garantiria a atualização em todos os caminhos de write.
+//
+// O agregado existe, mas em `user_points` (ver abaixo) e mantido por TRIGGER no
+// próprio D1, não por código de app — é a única forma de não poder ser furado por
+// seed, SQL manual ou um handler novo que alguém esqueça de atualizar.
+// point_events continua a fonte de verdade e `user_points` é reconstruível.
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
@@ -84,8 +89,14 @@ export const pointEvents = sqliteTable(
     index('idx_pe_user').on(t.userId),
     // Recompute dos triggers de user_points e a checagem de dia em deletePost.
     index('idx_pe_user_date_source').on(t.userId, t.eventDate, t.source),
-    // /sabados: filtro por source + range de event_date.
     index('idx_pe_source_date').on(t.source, t.eventDate),
+    // Parcial, para /sabados. O composto acima não resolve: sqlite_stat1 registra
+    // `390 390 30` para ele, ou seja, todas as rows têm o mesmo `source` e um lookup
+    // por source custaria o mesmo que o full scan — o planner então varria as 390
+    // rows para devolver 0. Com o parcial, medido 390 → 0 rows_read.
+    index('idx_pe_saturday')
+      .on(t.eventDate)
+      .where(sql`${t.source} = 'saturday_attendance'`),
   ]
 );
 
