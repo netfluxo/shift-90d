@@ -1,6 +1,6 @@
-import { eq, and, gte, lte, lt, sql } from 'drizzle-orm';
+import { eq, and, gte, lte, lt, desc, sql } from 'drizzle-orm';
 import { getDb } from '../client';
-import { pointEvents, posts } from '../schema';
+import { pointEvents, posts, userPoints } from '../schema';
 import { getTodayInBrazil, getDateInBrazil } from '@/lib/utils/timezone';
 
 export interface PointEvent {
@@ -171,64 +171,55 @@ export async function getPointEventsWithUsers(filters: {
 export async function getUserActivity(userId: string): Promise<UserActivity> {
   const db = getDb();
 
-  // Total points: SUM(points_delta) from all point_events
-  const totalPointsResult = await db
-    .select({
-      total: sql<number>`CAST(COALESCE(SUM(${pointEvents.pointsDelta}), 0) AS INTEGER)`,
-    })
-    .from(pointEvents)
-    .where(eq(pointEvents.userId, userId));
-
-  const totalPoints =
-    totalPointsResult.length > 0 ? totalPointsResult[0].total : 0;
-
-  // Total active days: COUNT(DISTINCT event_date) WHERE source='post'
-  const activeDaysResult = await db
-    .select({
-      count: sql<number>`CAST(COUNT(DISTINCT ${pointEvents.eventDate}) AS INTEGER)`,
-    })
-    .from(pointEvents)
-    .where(
-      and(
-        eq(pointEvents.userId, userId),
-        eq(pointEvents.source, 'post')
-      )
-    );
-
-  const totalActiveDays =
-    activeDaysResult.length > 0 ? activeDaysResult[0].count : 0;
-
-  // Today's posts count
   const todayInBrazil = getTodayInBrazil();
   const startOfDayBrazil = new Date(todayInBrazil + 'T00:00:00-03:00');
   const endOfDayBrazil = new Date(todayInBrazil + 'T23:59:59.999-03:00');
 
-  const todayPostsResult = await db
-    .select({
-      count: sql<number>`CAST(COUNT(*) AS INTEGER)`,
-    })
-    .from(posts)
-    .where(
-      and(
-        eq(posts.userId, userId),
-        // Operadores tipados (não sql`` cru): o Drizzle converte o Date para o
-        // formato da coluna (timestamp em segundos). Passar Date dentro de sql``
-        // quebra o bind no D1.
-        gte(posts.createdAt, startOfDayBrazil),
-        lt(posts.createdAt, endOfDayBrazil)
-      )
-    );
+  // O streak não pode ser maior que o programa (90 dias). Limitar a janela evita
+  // que a leitura cresça com o histórico — antes trazia todos os posts do usuário
+  // (393 rows_read) para derivar datas em JS.
+  const streakWindowStart = new Date(
+    startOfDayBrazil.getTime() - 100 * 24 * 60 * 60 * 1000
+  );
 
+  const [aggregate, todayPostsResult, userPosts] = await Promise.all([
+    // points e activeDays saem do agregado materializado (trigger em point_events).
+    // As duas agregações anteriores sobre point_events custavam 389 rows_read cada.
+    db
+      .select({ points: userPoints.points, activeDays: userPoints.activeDays })
+      .from(userPoints)
+      .where(eq(userPoints.userId, userId))
+      .limit(1),
+    db
+      .select({ count: sql<number>`CAST(COUNT(*) AS INTEGER)` })
+      .from(posts)
+      .where(
+        and(
+          eq(posts.userId, userId),
+          // Operadores tipados (não sql`` cru): o Drizzle converte o Date para o
+          // formato da coluna (timestamp em segundos). Passar Date dentro de sql``
+          // quebra o bind no D1.
+          gte(posts.createdAt, startOfDayBrazil),
+          lt(posts.createdAt, endOfDayBrazil)
+        )
+      ),
+    db
+      .select({ createdAt: posts.createdAt })
+      .from(posts)
+      .where(
+        and(eq(posts.userId, userId), gte(posts.createdAt, streakWindowStart))
+      )
+      .orderBy(desc(posts.createdAt)),
+  ]);
+
+  const totalPoints = aggregate[0]?.points ?? 0;
+  const totalActiveDays = aggregate[0]?.activeDays ?? 0;
   const todayPosts =
     todayPostsResult.length > 0 ? todayPostsResult[0].count : 0;
 
-  // Current streak: derived from posts
-  // Replicate exact algorithm from src/app/api/users/[userId]/activity/route.ts
-  const userPosts = await db
-    .select({ createdAt: posts.createdAt })
-    .from(posts)
-    .where(eq(posts.userId, userId))
-    .orderBy(sql`${posts.createdAt} DESC`);
+  // Current streak: derived from posts, em JS. A conversão de fuso continua no
+  // getDateInBrazil (Intl/America/Sao_Paulo) — fazer isso em SQL com um offset
+  // fixo '-03:00' mudaria a semântica e medi que sai mais caro.
 
   let currentStreak = 0;
 

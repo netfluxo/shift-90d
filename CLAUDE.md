@@ -74,7 +74,15 @@ src/
 
 **Auth** (`lib/auth/server.ts`): `getAuth()` builds a per-request Better Auth instance (`drizzleAdapter`, `usePlural: true`, `camelCase: true`). Client-side: `lib/auth/client.ts` (`signIn.email`, `signOut`, `useSession`).
 
-**Points/ranking**: no stored `points` column — always computed from `point_events` (`SUM(points_delta)` per user; `active_days` = `COUNT(DISTINCT event_date)` where `source='post'`). See `lib/db/queries/users.ts` (`getRanking`, `getUserById`) and `lib/db/queries/point-events.ts` (`getUserActivity`).
+**Points/ranking**: `point_events` is the source of truth (`points` = `SUM(points_delta)` per user; `active_days` = `COUNT(DISTINCT event_date)` where `source='post'`). The aggregation is **materialized** in `user_points`, maintained by four D1 triggers (`migrations/0003_user_points.sql`) — recomputing the whole ranking per request was costing 778–937 rows read each time.
+
+- Reads go through `user_points` (`getRanking`, `getUserById`, `getUserActivity`). Never re-aggregate `point_events` in a read path.
+- Writes to `point_events` need no extra code: the triggers keep `user_points` in sync, including via seed and manual `wrangler d1 execute`.
+- `drizzle-kit` does **not** version triggers. Recreating the DB from scratch requires applying `0003` — the snapshot alone is not enough.
+- Trigger bodies must use uppercase `BEGIN`/`END`: lowercase `begin` fails on remote D1 with `incomplete input [code: 7500]` while passing `--local` ([workers-sdk#10998](https://github.com/cloudflare/workers-sdk/issues/10998)).
+- Repair: `npm run db:verify-points:remote` (expects `divergences=0`), then `npm run db:rebuild-points:remote` if it drifts.
+
+**Feed pagination**: keyset on `(created_at, id)`, not `OFFSET`. `created_at` is a second-granularity timestamp, so `id` is required as tiebreaker. `/api/posts/feed` still accepts `?page=` as a legacy fallback.
 
 **Authentication middleware**: `src/middleware.ts` runs on **Edge runtime** and only checks *cookie presence* (`getSessionCookie` from `better-auth/cookies`) — never full session validation, to avoid Next.js 16's Proxy architecture pulling in `async_hooks` (unsupported on Cloudflare Workers, see `cloudflare/workers-sdk#13755`). Full session validation (`getAuth().api.getSession(...)`) happens in Server Components/Route Handlers.
 - Protects `/feed`, `/ranking`, `/profile`, `/sabados`

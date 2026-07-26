@@ -13,6 +13,10 @@
     "cf:typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
+    "db:rebuild-points:local": "wrangler d1 execute DB --local --file=./scripts/rebuild-user-points.sql",
+    "db:rebuild-points:remote": "wrangler d1 execute DB --remote --file=./scripts/rebuild-user-points.sql",
+    "db:verify-points:local": "wrangler d1 execute DB --local --file=./scripts/verify-points-parity.sql",
+    "db:verify-points:remote": "wrangler d1 execute DB --remote --file=./scripts/verify-points-parity.sql",
     "db:seed:gen": "tsx scripts/seed.ts",
     "db:seed:local": "wrangler d1 execute DB --local --file=./scripts/seed.sql",
     "db:seed:remote": "wrangler d1 execute DB --remote --file=./scripts/seed.sql"

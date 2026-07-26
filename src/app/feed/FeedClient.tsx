@@ -12,31 +12,35 @@ interface FeedClientProps {
   posts: Post[];
   currentUserId: string;
   hasMore: boolean;
+  /** Cursor keyset para a próxima página; null quando o SSR já trouxe tudo. */
+  initialCursor: string | null;
 }
 
-export default function FeedClient({ posts: initialPosts, currentUserId, hasMore: initialHasMore }: FeedClientProps) {
+export default function FeedClient({ posts: initialPosts, currentUserId, hasMore: initialHasMore, initialCursor }: FeedClientProps) {
   const router = useRouter();
   const [posts, setPosts] = useState<Post[]>(initialPosts);
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [loading, setLoading] = useState(false);
-  const [page, setPage] = useState(1); // page 0 was loaded by the server
+  // Cursor em vez de número de página: o OFFSET ficava mais caro a cada scroll e
+  // pulava/repetia post quando alguém postava durante a navegação.
+  const [cursor, setCursor] = useState<string | null>(initialCursor);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   // Reset state when server props change (e.g. after router.refresh())
   useEffect(() => {
     setPosts(initialPosts);
     setHasMore(initialHasMore);
-    setPage(1);
-  }, [initialPosts, initialHasMore]);
+    setCursor(initialCursor);
+  }, [initialPosts, initialHasMore, initialCursor]);
 
   const loadMore = useCallback(async () => {
-    if (loading || !hasMore) return;
+    if (loading || !hasMore || !cursor) return;
     setLoading(true);
 
     try {
-      const res = await fetch(`/api/posts/feed?page=${page}&limit=10`);
+      const res = await fetch(`/api/posts/feed?cursor=${encodeURIComponent(cursor)}&limit=10`);
       if (!res.ok) throw new Error('Failed to fetch');
-      const data = (await res.json()) as { posts: Post[]; hasMore: boolean };
+      const data = (await res.json()) as { posts: Post[]; hasMore: boolean; nextCursor: string | null };
 
       setPosts((prev) => {
         const existingIds = new Set(prev.map((p) => p.id));
@@ -44,13 +48,13 @@ export default function FeedClient({ posts: initialPosts, currentUserId, hasMore
         return [...prev, ...newPosts];
       });
       setHasMore(data.hasMore);
-      setPage((prev) => prev + 1);
+      setCursor(data.nextCursor);
     } catch (error) {
       console.error('Error loading more posts:', error);
     } finally {
       setLoading(false);
     }
-  }, [loading, hasMore, page]);
+  }, [loading, hasMore, cursor]);
 
   // IntersectionObserver for infinite scroll
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { eq, desc, sql, and, gte, lt, isNull } from 'drizzle-orm';
+import { eq, desc, sql, and, gte, lt, isNull, or, count } from 'drizzle-orm';
 import { getDb } from '../client';
 import {
   posts,
@@ -7,6 +7,8 @@ import {
   comments,
   pointEvents,
 } from '../schema';
+import { getRanking } from './users';
+import { buildDenseRankingMap } from '@/lib/utils/ranking';
 import { getTodayInBrazil, getDateInBrazil } from '@/lib/utils/timezone';
 
 export interface FeedPost {
@@ -37,202 +39,190 @@ export interface Post {
 }
 
 /**
- * Get paginated feed with all post data including likes, comments, and user ranking.
+ * Cursor de paginação keyset: `<createdAtEpochSeconds>_<postId>`.
  *
- * `page` is 0-indexed (mesmo contrato da rota atual `api/posts/feed`): o cliente
- * (FeedClient) renderiza a página 0 via SSR e só chama esta API a partir de page=1,
- * então offset = page * limit (não (page - 1) * limit).
+ * `id` é obrigatório como tiebreaker — `posts.created_at` é timestamp em segundos
+ * e empata em seed/bulk insert, o que faria o scroll pular ou repetir post.
+ */
+export interface FeedCursor {
+  createdAt: number;
+  id: string;
+}
+
+export function encodeFeedCursor(createdAt: Date, id: string): string {
+  return `${Math.floor(createdAt.getTime() / 1000)}_${id}`;
+}
+
+export function parseFeedCursor(raw: string | null | undefined): FeedCursor | null {
+  if (!raw) return null;
+  const sep = raw.indexOf('_');
+  if (sep <= 0) return null;
+  const createdAt = Number(raw.slice(0, sep));
+  const id = raw.slice(sep + 1);
+  if (!Number.isFinite(createdAt) || !id) return null;
+  return { createdAt, id };
+}
+
+/**
+ * Contagens e flag de like por post, como subqueries correlacionadas.
+ *
+ * Substituem o `LEFT JOIN likes/comments + GROUP BY posts.id`, que obrigava o
+ * SQLite a agregar a tabela `posts` inteira antes do LIMIT — 2372 rows_read para
+ * devolver 10 posts. Cada subquery aqui é um seek em índice coberto
+ * (`idx_likes_post`, `idx_comments_post`, `idx_likes_user_post`): 22 rows_read
+ * para a mesma página.
+ *
+ * `COUNT(*)` em vez de `COUNT(DISTINCT id)`: o DISTINCT só existia para desfazer a
+ * multiplicação do join cartesiano, que deixou de existir.
+ */
+function postMetricColumns(currentUserId: string) {
+  return {
+    likesCount: sql<number>`(
+      SELECT CAST(COUNT(*) AS INTEGER) FROM ${likes} WHERE ${likes.postId} = ${posts.id}
+    )`,
+    commentsCount: sql<number>`(
+      SELECT CAST(COUNT(*) AS INTEGER) FROM ${comments} WHERE ${comments.postId} = ${posts.id}
+    )`,
+    isLiked: sql<number>`(
+      SELECT EXISTS(
+        SELECT 1 FROM ${likes}
+        WHERE ${likes.postId} = ${posts.id} AND ${likes.userId} = ${currentUserId}
+      )
+    )`,
+  };
+}
+
+interface PostMetricRow {
+  id: string;
+  userId: string;
+  mediaUrl: string;
+  mediaType: string;
+  caption: string;
+  createdAt: Date;
+  userName: string;
+  userAvatarUrl: string | null;
+  likesCount: number;
+  commentsCount: number;
+  isLiked: number;
+}
+
+function toFeedPost(record: PostMetricRow, rankingMap: Map<string, number>): FeedPost {
+  return {
+    id: record.id,
+    userId: record.userId,
+    mediaUrl: record.mediaUrl,
+    mediaType: record.mediaType as 'image' | 'video',
+    caption: record.caption,
+    createdAt: record.createdAt,
+    user: {
+      id: record.userId,
+      name: record.userName,
+      avatarUrl: record.userAvatarUrl,
+    },
+    likesCount: record.likesCount,
+    commentsCount: record.commentsCount,
+    isLiked: record.isLiked === 1,
+    userRanking: rankingMap.get(record.userId) ?? null,
+  };
+}
+
+const postSelection = (currentUserId: string) => ({
+  id: posts.id,
+  userId: posts.userId,
+  mediaUrl: posts.mediaUrl,
+  mediaType: posts.mediaType,
+  caption: posts.caption,
+  createdAt: posts.createdAt,
+  userName: users.name,
+  userAvatarUrl: users.avatarUrl,
+  ...postMetricColumns(currentUserId),
+});
+
+/**
+ * Feed paginado.
+ *
+ * Paginação keyset por `(created_at, id)` via `idx_posts_created_id`: custo
+ * constante por página, ao contrário do OFFSET, que crescia com a profundidade do
+ * scroll. `page` continua aceito como fallback para clientes que ainda estavam com
+ * a versão anterior carregada durante o deploy.
+ *
+ * O ranking vem de `getRanking()` (60 rows de `user_points`) em vez de agregar
+ * `point_events` por request. Isso também alinha o feed com `/ranking`: antes o
+ * feed atribuía posição a usuário com 0 pontos, que a página de ranking não lista.
  */
 export async function getFeed(
   currentUserId: string,
-  page: number,
-  limit = 10
-): Promise<{ posts: FeedPost[]; hasMore: boolean }> {
+  options: { cursor?: string | null; page?: number; limit?: number } = {}
+): Promise<{ posts: FeedPost[]; hasMore: boolean; nextCursor: string | null }> {
   const db = getDb();
 
-  // Enforce max limit of 50
-  const finalLimit = Math.min(limit, 50);
-  const offset = page * finalLimit;
+  const finalLimit = Math.min(options.limit ?? 10, 50);
+  const cursor = parseFeedCursor(options.cursor);
+  // Offset só entra no caminho legado (sem cursor).
+  const offset = cursor ? 0 : Math.max(options.page ?? 0, 0) * finalLimit;
 
-  // First, calculate ranking for all users: sum points_delta per user, then rank by total
-  const userPointsRaw = await db
-    .select({
-      userId: pointEvents.userId,
-      totalPoints: sql<number>`CAST(COALESCE(SUM(${pointEvents.pointsDelta}), 0) AS INTEGER)`.as(
-        'total_points'
-      ),
-    })
-    .from(pointEvents)
-    .groupBy(pointEvents.userId);
+  const cursorDate = cursor ? new Date(cursor.createdAt * 1000) : null;
+  const keysetFilter =
+    cursor && cursorDate
+      ? or(
+          lt(posts.createdAt, cursorDate),
+          and(eq(posts.createdAt, cursorDate), lt(posts.id, cursor.id))
+        )
+      : undefined;
 
-  // Get unique sorted point values for dense ranking
-  const sortedPoints = Array.from(new Set(userPointsRaw.map((r) => r.totalPoints)))
-    .sort((a, b) => b - a);
+  const [rankingRows, postRecords] = await Promise.all([
+    getRanking(),
+    db
+      .select(postSelection(currentUserId))
+      .from(posts)
+      .innerJoin(users, eq(users.id, posts.userId))
+      .where(keysetFilter)
+      .orderBy(desc(posts.createdAt), desc(posts.id))
+      .limit(finalLimit + 1) // +1 revela se existe próxima página
+      .offset(offset),
+  ]);
 
-  // Build ranking map
-  const userRankingMap = new Map<string, number>();
-  for (let i = 0; i < sortedPoints.length; i++) {
-    for (const { userId, totalPoints } of userPointsRaw) {
-      if (totalPoints === sortedPoints[i]) {
-        userRankingMap.set(userId, i + 1);
-      }
-    }
-  }
-
-  // Query posts with pagination (without isLiked - will calculate separately)
-  const postRecords = await db
-    .select({
-      id: posts.id,
-      userId: posts.userId,
-      mediaUrl: posts.mediaUrl,
-      mediaType: posts.mediaType,
-      caption: posts.caption,
-      createdAt: posts.createdAt,
-      userName: users.name,
-      userAvatarUrl: users.avatarUrl,
-      // Count likes for this post
-      likesCount: sql<number>`CAST(COUNT(DISTINCT ${likes.id}) AS INTEGER)`.as(
-        'likes_count'
-      ),
-      // Count comments for this post
-      commentsCount: sql<number>`CAST(COUNT(DISTINCT ${comments.id}) AS INTEGER)`.as(
-        'comments_count'
-      ),
-    })
-    .from(posts)
-    .innerJoin(users, eq(posts.userId, users.id))
-    .leftJoin(likes, eq(likes.postId, posts.id))
-    .leftJoin(comments, eq(comments.postId, posts.id))
-    .groupBy(posts.id)
-    .orderBy(desc(posts.createdAt))
-    .limit(finalLimit + 1) // Fetch one extra to determine hasMore
-    .offset(offset);
-
-  // Extract hasMore and trim to finalLimit
   const hasMore = postRecords.length > finalLimit;
   const postsToReturn = postRecords.slice(0, finalLimit);
 
-  // Get liked posts by current user
-  const likedPostIds = await db
-    .select({ postId: likes.postId })
-    .from(likes)
-    .where(eq(likes.userId, currentUserId));
+  const rankingMap = buildDenseRankingMap(rankingRows);
+  const feedPosts = postsToReturn.map((record) => toFeedPost(record, rankingMap));
 
-  const likedPostIdSet = new Set(likedPostIds.map((l) => l.postId));
+  const last = postsToReturn[postsToReturn.length - 1];
+  const nextCursor = hasMore && last ? encodeFeedCursor(last.createdAt, last.id) : null;
 
-  // Build response with proper types and inject ranking
-  const feedPosts: FeedPost[] = postsToReturn.map((record) => ({
-    id: record.id,
-    userId: record.userId,
-    mediaUrl: record.mediaUrl,
-    mediaType: record.mediaType as 'image' | 'video',
-    caption: record.caption,
-    createdAt: record.createdAt,
-    user: {
-      id: record.userId,
-      name: record.userName,
-      avatarUrl: record.userAvatarUrl,
-    },
-    likesCount: record.likesCount,
-    commentsCount: record.commentsCount,
-    isLiked: likedPostIdSet.has(record.id),
-    userRanking: userRankingMap.get(record.userId) || null,
-  }));
-
-  return { posts: feedPosts, hasMore };
+  return { posts: feedPosts, hasMore, nextCursor };
 }
+
 /**
- * Get all posts by a specific user without pagination.
- * Returns posts ordered by createdAt descending, with full FeedPost shape.
+ * Todos os posts de um usuário, sem paginação (usado no perfil).
+ *
+ * `rankingRows` é opcional para a página de perfil poder reaproveitar o ranking que
+ * já buscou — antes o ranking global era recomputado aqui, dobrando o custo.
  */
 export async function getUserPosts(
   userId: string,
-  currentUserId: string
+  currentUserId: string,
+  rankingRows?: { id: string; points: number }[]
 ): Promise<FeedPost[]> {
   const db = getDb();
 
-  // First, calculate ranking for all users: sum points_delta per user, then rank by total
-  const userPointsRaw = await db
-    .select({
-      userId: pointEvents.userId,
-      totalPoints: sql<number>`CAST(COALESCE(SUM(${pointEvents.pointsDelta}), 0) AS INTEGER)`.as(
-        'total_points'
-      ),
-    })
-    .from(pointEvents)
-    .groupBy(pointEvents.userId);
+  const [ranking, postRecords] = await Promise.all([
+    rankingRows ? Promise.resolve(rankingRows) : getRanking(),
+    db
+      .select(postSelection(currentUserId))
+      .from(posts)
+      .innerJoin(users, eq(users.id, posts.userId))
+      .where(eq(posts.userId, userId))
+      // Sem tiebreaker por id: não há paginação aqui, e incluí-lo forçava
+      // "USE TEMP B-TREE FOR LAST TERM OF ORDER BY" sobre idx_posts_user_created.
+      .orderBy(desc(posts.createdAt)),
+  ]);
 
-  // Get unique sorted point values for dense ranking
-  const sortedPoints = Array.from(new Set(userPointsRaw.map((r) => r.totalPoints)))
-    .sort((a, b) => b - a);
-
-  // Build ranking map
-  const userRankingMap = new Map<string, number>();
-  for (let i = 0; i < sortedPoints.length; i++) {
-    for (const { userId: uid, totalPoints } of userPointsRaw) {
-      if (totalPoints === sortedPoints[i]) {
-        userRankingMap.set(uid, i + 1);
-      }
-    }
-  }
-
-  // Query posts for the specific user
-  const postRecords = await db
-    .select({
-      id: posts.id,
-      userId: posts.userId,
-      mediaUrl: posts.mediaUrl,
-      mediaType: posts.mediaType,
-      caption: posts.caption,
-      createdAt: posts.createdAt,
-      userName: users.name,
-      userAvatarUrl: users.avatarUrl,
-      // Count likes for this post
-      likesCount: sql<number>`CAST(COUNT(DISTINCT ${likes.id}) AS INTEGER)`.as(
-        'likes_count'
-      ),
-      // Count comments for this post
-      commentsCount: sql<number>`CAST(COUNT(DISTINCT ${comments.id}) AS INTEGER)`.as(
-        'comments_count'
-      ),
-    })
-    .from(posts)
-    .innerJoin(users, eq(posts.userId, users.id))
-    .leftJoin(likes, eq(likes.postId, posts.id))
-    .leftJoin(comments, eq(comments.postId, posts.id))
-    .where(eq(posts.userId, userId))
-    .groupBy(posts.id)
-    .orderBy(desc(posts.createdAt));
-
-  // Get liked posts by current user
-  const likedPostIds = await db
-    .select({ postId: likes.postId })
-    .from(likes)
-    .where(eq(likes.userId, currentUserId));
-
-  const likedPostIdSet = new Set(likedPostIds.map((l) => l.postId));
-
-  // Build response with proper types and inject ranking
-  const feedPosts: FeedPost[] = postRecords.map((record) => ({
-    id: record.id,
-    userId: record.userId,
-    mediaUrl: record.mediaUrl,
-    mediaType: record.mediaType as 'image' | 'video',
-    caption: record.caption,
-    createdAt: record.createdAt,
-    user: {
-      id: record.userId,
-      name: record.userName,
-      avatarUrl: record.userAvatarUrl,
-    },
-    likesCount: record.likesCount,
-    commentsCount: record.commentsCount,
-    isLiked: likedPostIdSet.has(record.id),
-    userRanking: userRankingMap.get(record.userId) || null,
-  }));
-
-  return feedPosts;
+  const rankingMap = buildDenseRankingMap(ranking);
+  return postRecords.map((record) => toFeedPost(record, rankingMap));
 }
+
 export async function createPost(
   userId: string,
   mediaUrl: string,
@@ -246,16 +236,19 @@ export async function createPost(
   const db = getDb();
   const today = getTodayInBrazil();
 
-  // Fetch all posts by this user (we'll filter by date in code)
-  const userPostsToday = await db
-    .select({ id: posts.id, createdAt: posts.createdAt })
+  // Conta os posts de hoje no próprio SQL. Antes trazia todos os posts do usuário
+  // para filtrar por data em JS (392 rows_read); agora é 1 seek em
+  // idx_posts_user_created.
+  const [{ value: dailyPostsCount }] = await db
+    .select({ value: count() })
     .from(posts)
-    .where(eq(posts.userId, userId));
-
-  // Count posts created today (in BRT) by filtering in JavaScript
-  const dailyPostsCount = userPostsToday.filter(
-    (p) => getDateInBrazil(p.createdAt) === today
-  ).length;
+    .where(
+      and(
+        eq(posts.userId, userId),
+        gte(posts.createdAt, new Date(`${today}T00:00:00-03:00`)),
+        lt(posts.createdAt, new Date(`${today}T23:59:59.999-03:00`))
+      )
+    );
 
   // Create the post
   const postId = crypto.randomUUID();
@@ -273,6 +266,7 @@ export async function createPost(
   // Award points only if this is the first post of the day
   let pointsAwarded = false;
   if (dailyPostsCount === 0) {
+    // user_points é atualizada pelo trigger point_events_after_insert.
     await db.insert(pointEvents).values({
       id: crypto.randomUUID(),
       userId,

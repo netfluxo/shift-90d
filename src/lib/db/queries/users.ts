@@ -1,6 +1,6 @@
-import { eq, desc, sql } from 'drizzle-orm';
+import { eq, desc, gt, sql } from 'drizzle-orm';
 import { getDb } from '../client';
-import { users, pointEvents } from '../schema';
+import { users, userPoints } from '../schema';
 
 /**
  * Get all users (id, name only) regardless of points — for admin pickers
@@ -22,13 +22,14 @@ export interface UserWithPoints {
 }
 
 /**
- * Busca um usuário específico com agregação de pontos via point_events.
+ * Busca um usuário específico com seus pontos.
  *
- * Fórmula:
- * - `points` = SUM(points_delta) de TODOS os point_events do usuário
- * - `activeDays` = COUNT(DISTINCT event_date) apenas onde source='post'
+ * Lê de `user_points` (agregado mantido por trigger a partir de point_events —
+ * ver migration 0003). A agregação equivalente sobre point_events custava 390
+ * rows_read; aqui são 2.
  *
- * Se o usuário não tem eventos de ponto, retorna points=0 e activeDays=0.
+ * LEFT JOIN + COALESCE: o trigger em `users` garante a row, mas um banco
+ * restaurado de dump antes do rebuild pode não tê-la. Não retornar null por isso.
  */
 export async function getUserById(id: string): Promise<UserWithPoints | null> {
   const db = getDb();
@@ -39,57 +40,41 @@ export async function getUserById(id: string): Promise<UserWithPoints | null> {
       name: users.name,
       avatarUrl: users.avatarUrl,
       createdAt: users.createdAt,
-      points: sql<number>`COALESCE(SUM(${pointEvents.pointsDelta}), 0)`,
-      activeDays: sql<number>`COALESCE(
-        COUNT(DISTINCT
-          CASE WHEN ${pointEvents.source} = 'post' THEN ${pointEvents.eventDate} ELSE NULL END
-        ),
-        0
-      )`,
+      points: sql<number>`COALESCE(${userPoints.points}, 0)`,
+      activeDays: sql<number>`COALESCE(${userPoints.activeDays}, 0)`,
     })
     .from(users)
-    .leftJoin(pointEvents, eq(users.id, pointEvents.userId))
+    .leftJoin(userPoints, eq(userPoints.userId, users.id))
     .where(eq(users.id, id))
-    .groupBy(users.id);
+    .limit(1);
 
   return result[0] || null;
 }
 
 /**
- * Busca ranking de usuários com points > 0, ordenado por pontos descrescentes.
+ * Busca ranking de usuários com points > 0, ordenado por pontos decrescentes.
  *
- * Fórmula:
- * - `points` = SUM(points_delta) de TODOS os point_events do usuário
- * - `activeDays` = COUNT(DISTINCT event_date) apenas onde source='post'
+ * Mesma semântica do HAVING anterior (`points > 0`), agora como WHERE sobre o
+ * agregado materializado: 937 rows_read → 60.
  *
- * Filtra points > 0 via HAVING (mesmo comportamento do ranking/page.tsx atual:
- * `.gt('points', 0)`).
+ * O dense ranking (posições com empate) continua em `buildDenseRankingMap`,
+ * sobre o resultado desta query.
  */
 export async function getRanking(limit = 100): Promise<UserWithPoints[]> {
   const db = getDb();
 
-  const pointsAlias = sql<number>`COALESCE(SUM(${pointEvents.pointsDelta}), 0)`;
-
-  const result = await db
+  return db
     .select({
       id: users.id,
       name: users.name,
       avatarUrl: users.avatarUrl,
       createdAt: users.createdAt,
-      points: pointsAlias,
-      activeDays: sql<number>`COALESCE(
-        COUNT(DISTINCT
-          CASE WHEN ${pointEvents.source} = 'post' THEN ${pointEvents.eventDate} ELSE NULL END
-        ),
-        0
-      )`,
+      points: userPoints.points,
+      activeDays: userPoints.activeDays,
     })
-    .from(users)
-    .leftJoin(pointEvents, eq(users.id, pointEvents.userId))
-    .groupBy(users.id)
-    .having(sql`${pointsAlias} > 0`)
-    .orderBy(desc(pointsAlias))
+    .from(userPoints)
+    .innerJoin(users, eq(users.id, userPoints.userId))
+    .where(gt(userPoints.points, 0))
+    .orderBy(desc(userPoints.points))
     .limit(limit);
-
-  return result;
 }
