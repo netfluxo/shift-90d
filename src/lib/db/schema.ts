@@ -90,6 +90,33 @@ export const pointEvents = sqliteTable(
 );
 
 
+/**
+ * Agregado derivado de `point_events`, mantido por TRIGGER no próprio D1
+ * (ver `migrations/0003_user_points.sql`). `point_events` continua a fonte de
+ * verdade — esta tabela é reconstruível a qualquer momento via
+ * `npm run db:rebuild-points:remote`.
+ *
+ * Existe porque o ranking era recalculado por request com full scan de
+ * point_events (778 rows_read por carga de feed, 937 no /ranking). Aqui são
+ * 60 rows fixas, independentes do histórico de eventos.
+ *
+ * Fórmula (idêntica à agregação que substituiu):
+ * - points     = SUM(points_delta) de TODOS os eventos do usuário
+ * - activeDays = COUNT(DISTINCT event_date) apenas onde source='post'
+ *
+ * ATENÇÃO: drizzle-kit não versiona triggers. Recriar o banco do zero exige
+ * aplicar 0003 — não basta o snapshot.
+ */
+export const userPoints = sqliteTable(
+  'user_points',
+  {
+    userId: text('user_id').primaryKey().references(() => users.id),
+    points: integer('points').notNull().default(0),
+    activeDays: integer('active_days').notNull().default(0),
+  },
+  (t) => [index('idx_user_points_points').on(t.points)]
+);
+
 // Better Auth tables
 export const sessions = sqliteTable(
   'sessions',
