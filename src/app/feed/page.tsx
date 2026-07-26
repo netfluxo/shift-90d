@@ -15,7 +15,9 @@ export default async function FeedPage() {
   }
 
   // Fetch first page of feed
-  const { posts: feedPosts, hasMore } = await getFeed(session.user.id, 0, 10);
+  const { posts: feedPosts, hasMore, nextCursor } = await getFeed(session.user.id, {
+    limit: 10,
+  });
 
   // Transform FeedPost (camelCase) to Post (snake_case)
   const transformedPosts: Post[] = feedPosts.map((post) => ({
@@ -38,5 +40,12 @@ export default async function FeedPage() {
     user_ranking: post.userRanking || 0,
   }));
 
-  return <FeedClient posts={transformedPosts} currentUserId={session.user.id} hasMore={hasMore} />;
+  return (
+    <FeedClient
+      posts={transformedPosts}
+      currentUserId={session.user.id}
+      hasMore={hasMore}
+      initialCursor={nextCursor}
+    />
+  );
 }

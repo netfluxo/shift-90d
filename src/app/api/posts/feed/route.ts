@@ -12,11 +12,17 @@ export async function GET(request: NextRequest) {
   }
 
   const searchParams = request.nextUrl.searchParams;
-  const page = parseInt(searchParams.get('page') || '0', 10);
   const limit = Math.min(parseInt(searchParams.get('limit') || String(PAGE_SIZE), 10), 50);
+  // `cursor` é o contrato atual (keyset). `page` fica aceito como fallback para
+  // clientes que ainda tenham a versão anterior do FeedClient carregada.
+  const cursor = searchParams.get('cursor');
+  const page = parseInt(searchParams.get('page') || '0', 10);
 
-  // Fetch posts using getFeed
-  const { posts: feedPosts, hasMore } = await getFeed(session.user.id, page, limit);
+  const { posts: feedPosts, hasMore, nextCursor } = await getFeed(session.user.id, {
+    cursor,
+    page,
+    limit,
+  });
 
   // Transform FeedPost (camelCase) to Post (snake_case)
   const transformedPosts: Post[] = feedPosts.map((post) => ({
@@ -42,6 +48,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     posts: transformedPosts,
     hasMore,
+    nextCursor,
   }, {
     headers: {
       'Cache-Control': 'private, max-age=60, stale-while-revalidate=300',

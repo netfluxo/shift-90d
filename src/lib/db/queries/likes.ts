@@ -20,12 +20,18 @@ export async function toggleLike(
     await db.delete(likes).where(eq(likes.id, existing[0].id));
     action = 'unliked';
   } else {
-    await db.insert(likes).values({
-      id: crypto.randomUUID(),
-      userId,
-      postId,
-      createdAt: new Date(),
-    });
+    // onConflictDoNothing: existe UNIQUE(user_id, post_id) desde a migration 0002.
+    // O select acima é read-then-write, então dois toques simultâneos podem chegar
+    // aqui juntos — sem isso o segundo viraria 500.
+    await db
+      .insert(likes)
+      .values({
+        id: crypto.randomUUID(),
+        userId,
+        postId,
+        createdAt: new Date(),
+      })
+      .onConflictDoNothing({ target: [likes.userId, likes.postId] });
     action = 'liked';
   }
 

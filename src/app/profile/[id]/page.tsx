@@ -30,15 +30,19 @@ export default async function UserProfilePage({ params }: Props) {
     redirect('/profile');
   }
 
-  // Fetch user profile
-  const userWithPoints = await getUserById(id);
+  // Ranking é buscado uma única vez e reaproveitado por getUserPosts e pela
+  // posição do usuário — antes cada um recomputava a agregação global.
+  const [userWithPoints, ranking, activity] = await Promise.all([
+    getUserById(id),
+    getRanking(100),
+    getUserActivity(id),
+  ]);
 
   if (!userWithPoints) {
     notFound();
   }
 
-  // Fetch user's posts
-  const feedPosts = await getUserPosts(id, currentUserId);
+  const feedPosts = await getUserPosts(id, currentUserId, ranking);
 
   // Convert FeedPost to Post shape for ProfileClient
   const posts = feedPosts.map((post) => ({
@@ -61,9 +65,6 @@ export default async function UserProfilePage({ params }: Props) {
     user_ranking: post.userRanking || 0,
   }));
 
-  // Fetch activity stats for this user
-  const activity = await getUserActivity(id);
-
   const activityStats = {
     total_active_days: activity.totalActiveDays,
     current_streak: activity.currentStreak,
@@ -72,8 +73,6 @@ export default async function UserProfilePage({ params }: Props) {
     today_points: activity.todayPoints,
   };
 
-  // Get ranking position
-  const ranking = await getRanking(100);
   const rankingMap = buildDenseRankingMap(
     ranking.map((u) => ({ id: u.id, points: u.points }))
   );

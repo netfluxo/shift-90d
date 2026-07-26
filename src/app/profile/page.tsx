@@ -19,8 +19,13 @@ export default async function ProfilePage() {
 
   const userId = session.user.id;
 
-  // Fetch user profile
-  const userWithPoints = await getUserById(userId);
+  // Ranking é buscado uma única vez e reaproveitado por getUserPosts e pela
+  // posição do usuário — antes cada um recomputava a agregação global.
+  const [userWithPoints, ranking, activity] = await Promise.all([
+    getUserById(userId),
+    getRanking(100),
+    getUserActivity(userId),
+  ]);
 
   if (!userWithPoints) {
     // User should exist via Better Auth seed, but if not, error
@@ -28,8 +33,7 @@ export default async function ProfilePage() {
     redirect('/login');
   }
 
-  // Fetch user's posts
-  const feedPosts = await getUserPosts(userId, userId);
+  const feedPosts = await getUserPosts(userId, userId, ranking);
 
   // Convert FeedPost to Post shape for ProfileClient
   const posts = feedPosts.map((post) => ({
@@ -52,9 +56,6 @@ export default async function ProfilePage() {
     user_ranking: post.userRanking || 0,
   }));
 
-  // Fetch activity stats
-  const activity = await getUserActivity(userId);
-
   const activityStats = {
     total_active_days: activity.totalActiveDays,
     current_streak: activity.currentStreak,
@@ -63,8 +64,6 @@ export default async function ProfilePage() {
     today_points: activity.todayPoints,
   };
 
-  // Get ranking position
-  const ranking = await getRanking(100);
   const rankingMap = buildDenseRankingMap(
     ranking.map((u) => ({ id: u.id, points: u.points }))
   );

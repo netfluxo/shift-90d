@@ -28,11 +28,8 @@
 		}
 	],
 	"d1_databases": [
-		{
-			"binding": "NEXT_TAG_CACHE_D1",
-			"database_name": "shift90d-cache",
-			"database_id": "2eefd7f4-8ba7-47c4-ac77-2a09b9b85aff"
-		},
+		// NEXT_TAG_CACHE_D1 foi removido: o incremental cache do OpenNext é no-op
+		// (ver open-next.config.ts) e o database shift90d-cache tinha 0 tabelas.
 		{
 			"binding": "DB",
 			"database_name": "shift90d",
