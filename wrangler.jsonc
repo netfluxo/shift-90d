@@ -4,6 +4,13 @@
 	"main": ".open-next/worker.js",
 	"compatibility_date": "2025-06-01",
 	"compatibility_flags": ["nodejs_compat"],
+	// Workers Logs: incluído no plano Free (200k eventos/dia, retenção 3 dias).
+	// Sem isto os console.error das rotas se perdem — não há histórico para
+	// investigar falhas de publicação depois do fato.
+	"observability": {
+		"enabled": true,
+		"head_sampling_rate": 1
+	},
 	"vars": {
 		"NEXT_PUBLIC_R2_PUBLIC_URL": "https://pub-1aed824bdf3a40d3a22f6042d9a75d2b.r2.dev"
 	},
