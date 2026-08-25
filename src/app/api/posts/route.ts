@@ -70,9 +70,10 @@ export async function POST(request: NextRequest) {
       daily_limit_reached: dailyPostsCount >= 1,
     });
   } catch (error) {
+    // `errorMessage`, não `error`: chave reservada do evento de log (ver /api/client-error).
     console.error('[publish] create_post_failed', {
       userId,
-      error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+      errorMessage: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
     });
     return NextResponse.json(
       { success: false, error: 'Internal server error' },

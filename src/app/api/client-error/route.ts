@@ -40,17 +40,21 @@ export async function POST(request: NextRequest) {
       // Sessão indisponível não invalida o log — segue com userId null.
     }
 
+    // `clientMessage`, não `message`: o Workers Logs mescla este objeto no evento, e uma
+    // chave `message` sobrescreve o texto do primeiro argumento — o prefixo `[publish]`
+    // desaparecia e não dava para filtrar por ele. Mesmo motivo para evitar `error` e
+    // `level`, que também são campos reservados do evento.
     console.error('[publish] client_error', {
-      userId,
+      userId: userId ?? 'anonymous',
       stage: payload.stage ?? 'unknown',
-      message: payload.message ?? '',
+      clientMessage: payload.message ?? '',
       meta: payload.meta ?? {},
     });
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     console.error('[publish] client_error_drain_failed', {
-      error: error instanceof Error ? error.message : String(error),
+      errorMessage: error instanceof Error ? error.message : String(error),
     });
     return new NextResponse(null, { status: 204 });
   }
