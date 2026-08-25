@@ -14,6 +14,9 @@ const MIME_TO_EXT: Record<string, string> = {
 };
 
 export async function POST(request: Request) {
+  // Fora do try para que o catch consiga atribuir a falha a um usuário.
+  let userId: string | null = null;
+
   try {
     // Validate session
     const auth = getAuth();
@@ -22,11 +25,14 @@ export async function POST(request: Request) {
     });
 
     if (!session?.user) {
+      console.error('[publish] upload_unauthorized');
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
     }
+
+    userId = session.user.id;
 
     // Parse multipart form
     const formData = await request.formData();
@@ -35,6 +41,7 @@ export async function POST(request: Request) {
 
     // Validate inputs
     if (!file) {
+      console.error('[publish] upload_missing_file', { userId });
       return NextResponse.json(
         { error: 'Missing file field' },
         { status: 400 }
@@ -42,6 +49,7 @@ export async function POST(request: Request) {
     }
 
     if (!type || !['post', 'avatar'].includes(type)) {
+      console.error('[publish] upload_invalid_type', { userId, type });
       return NextResponse.json(
         { error: 'Invalid or missing type field (must be "post" or "avatar")' },
         { status: 400 }
@@ -70,12 +78,22 @@ export async function POST(request: Request) {
     // Generate public URL
     const publicUrl = `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${key}`;
 
+    console.log('[publish] upload_ok', {
+      userId,
+      key,
+      contentType,
+      sizeBytes: arrayBuffer.byteLength,
+    });
+
     return NextResponse.json(
       { key, url: publicUrl },
       { status: 200 }
     );
   } catch (error) {
-    console.error('Upload error:', error);
+    console.error('[publish] upload_failed', {
+      userId,
+      error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+    });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
