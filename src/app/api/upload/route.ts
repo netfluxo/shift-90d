@@ -90,9 +90,10 @@ export async function POST(request: Request) {
       { status: 200 }
     );
   } catch (error) {
+    // `errorMessage`, não `error`: chave reservada do evento de log (ver /api/client-error).
     console.error('[publish] upload_failed', {
       userId,
-      error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+      errorMessage: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
     });
     return NextResponse.json(
       { error: 'Internal server error' },
