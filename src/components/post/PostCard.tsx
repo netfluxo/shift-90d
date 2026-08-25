@@ -67,7 +67,9 @@ export default function PostCard({ post, currentUserId }: PostCardProps) {
     <article className="bg-white border-b border-gray-100">
       {/* Header */}
       <div className="flex items-center justify-between p-3">
-        <Link href={`/profile/${post.user_id}`} className="flex items-center gap-3">
+        {/* prefetch={false}: /profile/[id] é force-dynamic com 4 queries D1 — o prefetch
+            default disparava dezenas de renders por scroll de feed. */}
+        <Link href={`/profile/${post.user_id}`} prefetch={false} className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden">
             {post.user?.avatar_url ? (
               <Image

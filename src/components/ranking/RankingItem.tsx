@@ -44,8 +44,10 @@ export default function RankingItem({ user, position }: RankingItemProps) {
   const style = getPositionStyle();
   const isTopThree = position <= 3;
 
+  // prefetch={false}: o ranking lista até 100 usuários — com prefetch default cada carga
+  // da página disparava um render dinâmico de perfil por item.
   return (
-    <Link href={`/profile/${user.id}`}>
+    <Link href={`/profile/${user.id}`} prefetch={false}>
       <div className="mx-4 my-3 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
         <div className="flex items-center gap-4 p-4">
           {/* Position Badge / Number */}
