@@ -2,19 +2,21 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useSession } from '@/lib/auth/client';
 
 const navItems = [
-  { href: '/feed', label: 'Feed', icon: HomeIcon, adminOnly: false },
-  { href: '/ranking', label: 'Ranking', icon: TrophyIcon, adminOnly: false },
-  { href: '/sabados', label: 'Sábados', icon: CalendarIcon, adminOnly: false },
-  { href: '/profile', label: 'Perfil', icon: UserIcon, adminOnly: false },
+  { href: '/feed', label: 'Feed', icon: HomeIcon },
+  { href: '/ranking', label: 'Ranking', icon: TrophyIcon },
+  { href: '/sabados', label: 'Sábados', icon: CalendarIcon },
+  { href: '/profile', label: 'Perfil', icon: UserIcon },
 ];
 
+// Sem `useSession()` de propósito: o hook disparava GET /api/auth/get-session em toda
+// navegação (este componente está nas 4 páginas) e em 24/08 6 das 46 chamadas ficaram
+// penduradas de 47s a 314s, terminando em `canceled`. A sessão só alimentava um `isAdmin`
+// que nunca escondia nada — todos os itens de navItems eram `adminOnly: false`.
+// A rota é protegida por src/middleware.ts + validação nos Server Components.
 export default function BottomNav() {
   const pathname = usePathname();
-  const { data: session } = useSession();
-  const isAdmin = session?.user?.email === 'admin@admin.com';
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50">
@@ -29,7 +31,7 @@ export default function BottomNav() {
               href={item.href}
               className={`flex flex-col items-center justify-center w-full h-full transition-colors ${
                 isActive ? 'text-primary' : 'text-gray-500 hover:text-gray-700'
-              } ${item.adminOnly && !isAdmin ? 'hidden' : ''}`}
+              }`}
             >
               <Icon className="w-6 h-6" filled={isActive} />
               <span className="text-xs mt-1 font-medium">{item.label}</span>
