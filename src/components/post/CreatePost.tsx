@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { resizeImageFile } from '@/lib/utils/image-resize';
+import { reportClientError, type PublishStage } from '@/lib/utils/report-client-error';
 
 interface CreatePostProps {
   userId: string;
@@ -50,12 +51,23 @@ export default function CreatePost({ userId, onPostCreated }: CreatePostProps) {
     const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'video/mp4', 'video/webm'];
     if (!validTypes.includes(selectedFile.type)) {
       setError('Formato nao suportado. Use JPG, PNG, GIF, WebP ou MP4.');
+      // Reportado porque esta lista é mais restritiva que a do servidor (que já aceita
+      // video/quicktime) e um iPhone entrega .mov/HEIC. Sem o log, a rejeição não deixa
+      // rastro nenhum — o usuário só relata "não consegui publicar".
+      reportClientError('validate', 'unsupported_mime', {
+        mime: selectedFile.type,
+        sizeBytes: selectedFile.size,
+      });
       return;
     }
 
     // Validate file size (max 50MB)
     if (selectedFile.size > 50 * 1024 * 1024) {
       setError('Arquivo muito grande. Maximo 50MB.');
+      reportClientError('validate', 'file_too_large', {
+        mime: selectedFile.type,
+        sizeBytes: selectedFile.size,
+      });
       return;
     }
 
@@ -78,6 +90,10 @@ export default function CreatePost({ userId, onPostCreated }: CreatePostProps) {
     setError('');
     setSuccessMessage('');
 
+    // Etapa corrente, para que o log diga *onde* quebrou. As três etapas produziam a mesma
+    // mensagem genérica na UI e nada saía do dispositivo.
+    let stage: PublishStage = 'resize';
+
     try {
       // Determine media type
       const mediaType = file.type.startsWith('video/') ? 'video' : 'image';
@@ -90,6 +106,7 @@ export default function CreatePost({ userId, onPostCreated }: CreatePostProps) {
       }
 
       // Upload file via /api/upload
+      stage = 'upload';
       const formData = new FormData();
       formData.append('file', fileToUpload);
       formData.append('type', 'post');
@@ -106,6 +123,7 @@ export default function CreatePost({ userId, onPostCreated }: CreatePostProps) {
       }
 
       // Create post via API
+      stage = 'create-post';
       const response = await fetch('/api/posts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -153,6 +171,10 @@ export default function CreatePost({ userId, onPostCreated }: CreatePostProps) {
     } catch (err) {
       setError('Erro ao criar post. Tente novamente.');
       console.error(err);
+      reportClientError(stage, err, {
+        mime: file.type,
+        sizeBytes: file.size,
+      });
       setLoading(false);
     }
   };

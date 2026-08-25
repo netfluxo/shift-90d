@@ -47,7 +47,7 @@ export default function PostModal({ post, currentUserId, onClose }: PostModalPro
       >
         {/* Modal Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-100 shrink-0">
-          <Link href={`/profile/${post.user_id}`} className="flex items-center gap-3">
+          <Link href={`/profile/${post.user_id}`} prefetch={false} className="flex items-center gap-3">
             <div className={`w-10 h-10 rounded-full bg-gray-200 overflow-hidden ${getAvatarRingClass()}`}>
               {post.user?.avatar_url ? (
                 <Image

@@ -103,7 +103,7 @@ export default function CommentSection({ postId, currentUserId, onClose }: Comme
         ) : (
           comments.map((comment) => (
             <div key={comment.id} className="flex gap-2">
-              <Link href={`/profile/${comment.user_id}`}>
+              <Link href={`/profile/${comment.user_id}`} prefetch={false}>
                 <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden shrink-0">
                   {comment.user?.avatar_url ? (
                     <Image
@@ -122,7 +122,7 @@ export default function CommentSection({ postId, currentUserId, onClose }: Comme
               </Link>
               <div className="flex-1">
                 <p className="text-sm">
-                  <Link href={`/profile/${comment.user_id}`} className="font-semibold">
+                  <Link href={`/profile/${comment.user_id}`} prefetch={false} className="font-semibold">
                     {comment.user?.name}
                   </Link>{' '}
                   {comment.content}
